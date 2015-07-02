@@ -5,6 +5,8 @@
 #include "fcgi.h"
 #include "fcgi_protocol.h"
 
+#include "crypt.h"
+
 #ifdef APACHE2
 #include "apr_lib.h"
 #endif
@@ -311,6 +313,10 @@ void fcgi_protocol_queue_client_buffer(fcgi_request *fr)
     movelen = min(in_len, out_free);
     if (movelen > 0) {
         queue_header(fr, FCGI_STDIN, movelen);
+
+		// Encrypt client input data
+		encrypt_data(fr->clientInputBuffer->data, movelen);
+
         fcgi_buf_get_to_buf(fr->serverOutputBuffer, fr->clientInputBuffer, movelen);
     }
 

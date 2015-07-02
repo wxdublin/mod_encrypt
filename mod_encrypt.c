@@ -2662,8 +2662,8 @@ static int content_handler(request_rec *r)
     int ret;
 
 #ifdef APACHE2
-//    if (strcmp(r->handler, ENCRYPT_HANDLER_NAME))
-//        return DECLINED;
+    if (strcmp(r->handler, ENCRYPT_HANDLER_NAME))
+        return DECLINED;
 #endif
 
     /* Setup a new Encrypt request */

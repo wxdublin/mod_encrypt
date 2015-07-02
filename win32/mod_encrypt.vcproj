@@ -355,7 +355,7 @@
 				Name="VCCLCompilerTool"
 				AdditionalOptions="/EHsc "
 				Optimization="0"
-				AdditionalIncludeDirectories="F:\Gluu\Apache24\include;..\src;.\libcurl\include;"
+				AdditionalIncludeDirectories="F:\Gluu\Apache24\include;..\src;.\libcurl\include;.\openssl\include;"
 				PreprocessorDefinitions="_DEBUG;WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;CURL_STATICLIB;"
 				RuntimeLibrary="3"
 				PrecompiledHeaderFile=".\Debug/mod_uma.pch"
@@ -381,11 +381,11 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="ws2_32.lib winmm.lib apr-1.lib libapr-1.lib aprutil-1.lib libapriconv-1.lib libaprutil-1.lib libhttpd.lib"
+				AdditionalDependencies="ws2_32.lib winmm.lib apr-1.lib libapr-1.lib aprutil-1.lib libapriconv-1.lib libaprutil-1.lib libhttpd.lib libeay32_.lib ssleay32_.lib"
 				OutputFile="$(OutDir)\$(ProjectName).so"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
-				AdditionalLibraryDirectories="F:\Gluu\Apache24\lib"
+				AdditionalLibraryDirectories="F:\Gluu\Apache24\lib;.\openssl\lib"
 				IgnoreDefaultLibraryNames="msvcrt.lib"
 				GenerateDebugInformation="true"
 				ProgramDatabaseFile=".\Debug/mod_uma.pdb"
@@ -429,6 +429,14 @@
 		<Filter
 			Name="Source Files"
 			>
+			<File
+				RelativePath="..\crypt.c"
+				>
+			</File>
+			<File
+				RelativePath="..\crypt.h"
+				>
+			</File>
 			<File
 				RelativePath="..\fcgi.h"
 				>

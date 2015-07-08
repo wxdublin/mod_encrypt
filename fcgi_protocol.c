@@ -5,7 +5,7 @@
 #include "fcgi.h"
 #include "fcgi_protocol.h"
 
-#include "crypt.h"
+#include "crypt/crypt.h"
 
 #ifdef APACHE2
 #include "apr_lib.h"
@@ -273,7 +273,12 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
             /* drop through */
 
         case VALUE:
-            charCount = fcgi_buf_add_block(fr->serverOutputBuffer, env->equalPtr, env->valueLen);
+// 			if (strncasecmp(*env->envp, "HTTP_X_SCAL_", 12) == 0) {
+// 				// only when PUT
+// 				if (r->method_number == M_PUT)
+// 					encrypt_data(env->equalPtr, env->valueLen);
+// 			}
+			charCount = fcgi_buf_add_block(fr->serverOutputBuffer, env->equalPtr, env->valueLen);
             if (charCount != env->valueLen) {
                 env->equalPtr += charCount;
                 env->valueLen -= charCount;
@@ -314,8 +319,9 @@ void fcgi_protocol_queue_client_buffer(fcgi_request *fr)
     if (movelen > 0) {
         queue_header(fr, FCGI_STDIN, movelen);
 
-		// Encrypt client input data
-		encrypt_data(fr->clientInputBuffer->data, movelen);
+// 		// Encrypt client input data
+// 		if (fr->r->method_number == M_PUT)
+// 			encrypt_data(fr->clientInputBuffer->data, movelen);
 
         fcgi_buf_get_to_buf(fr->serverOutputBuffer, fr->clientInputBuffer, movelen);
     }

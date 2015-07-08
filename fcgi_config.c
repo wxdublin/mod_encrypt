@@ -414,7 +414,8 @@ const char *fcgi_config_make_dynamic_dir(pool *p, const int wax)
 #else /* !APACHE2 */
     {
         DIR *dp;
-        struct dirent *dirp = NULL;
+        struct d
+			irent *dirp = NULL;
 
         tp = ap_make_sub_pool(p);
 
@@ -842,7 +843,7 @@ const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const cha
 
     return NULL;
 }
-
+
 /*******************************************************************************
  * Configure a static Encrypt server that is started/managed elsewhere.
  */

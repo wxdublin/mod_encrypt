@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <openssl/evp.h>
 
-#define AES_BLOCK_SIZE 64
+#define AES_BLOCK_SIZE 512
 
 /* 8 bytes to salt the key_data during key generation. This is an example of
      compiled in salt. We just read the bit pattern created by these two 4 byte 
@@ -15,7 +15,7 @@ unsigned int SALT[] = {12345, 54321};
  * Encrypt *len bytes of data
  * All data going in & out is considered binary (unsigned char[])
  */
-unsigned char *aes_encrypt(unsigned char *plaintext, int *len, unsigned char *key_data, int key_data_len)
+unsigned char *aes256_enc(unsigned char *plaintext, int *len, unsigned char *key_data, int key_data_len)
 {
 	EVP_CIPHER_CTX en;
 	int i, nrounds = 5;
@@ -58,7 +58,7 @@ unsigned char *aes_encrypt(unsigned char *plaintext, int *len, unsigned char *ke
 /*
  * Decrypt *len bytes of ciphertext
  */
-unsigned char *aes_decrypt(unsigned char *ciphertext, int *len, unsigned char *key_data, int key_data_len)
+unsigned char *aes256_dec(unsigned char *ciphertext, int *len, unsigned char *key_data, int key_data_len)
 {
 	EVP_CIPHER_CTX de;
 	int i, nrounds = 5;
@@ -90,43 +90,4 @@ unsigned char *aes_decrypt(unsigned char *ciphertext, int *len, unsigned char *k
 	EVP_CIPHER_CTX_cleanup(&de);
 
 	return plaintext;
-}
-
-int main_(int argc, char **argv)
-{
-	unsigned char *key_data;
-	int key_data_len, i;
-	char *input[] = {"a", "abcd", "this is a test", "this is a bigger test", 
-		"\nWho are you ?\nI am the 'Doctor'.\n'Doctor' who ?\nPrecisely!",
-		NULL};
-	
-	/* the key_data is read from the argument list */
-	key_data = (unsigned char *)argv[1];
-	key_data_len = (int)strlen(argv[1]);
-
-	/* encrypt and decrypt each input string and compare with the original */
-	for (i = 0; input[i]; i++) {
-		char *plaintext;
-		unsigned char *ciphertext;
-		int olen, len;
-		
-		/* The enc/dec functions deal with binary data and not C strings. strlen() will 
-		return length of the string without counting the '\0' string marker. We always
-		pass in the marker byte to the encrypt/decrypt functions so that after decryption 
-		we end up with a legal C string */
-		olen = len = (int)strlen(input[i])+1;
-		
-		ciphertext = aes_encrypt((unsigned char *)input[i], &len, key_data, key_data_len);
-		plaintext = (char *)aes_decrypt(ciphertext, &len, key_data, key_data_len);
-		
-		if (strncmp(plaintext, input[i], olen)) 
-			printf("FAIL: enc/dec failed for \"%s\"\n", input[i]);
-		else 
-			printf("OK: enc/dec ok for \"%s\"\n", plaintext);
-
-		free(ciphertext);
-		free(plaintext);
-	}
-
-	return 0;
 }

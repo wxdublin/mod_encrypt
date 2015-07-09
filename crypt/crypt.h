@@ -5,13 +5,11 @@
 #ifndef CRYPT_H
 #define CRYPT_H
 
-#define CRYPT_BLOCK_SIZE	64
+#define CRYPT_BLOCK_SIZE	512
 
 char *encrypt_data(char *data, int *len);
 char *decrypt_data(char *data, int *len);
-
-// void encrypt_data(char *data, int len);
-// void decrypt_data(char *data, int len);
+void encrypt_data_stream(char *data, int len);
 
 #endif  /* CRYPT_H */
 

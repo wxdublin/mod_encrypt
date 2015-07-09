@@ -840,10 +840,10 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 
     if (len > 0) {
         int sent;
-// //		if (r->method_number == M_GET)
-//			decrypt_data(next, len);
-        sent = fcgi_buf_add_block(fr->clientOutputBuffer, next, len);
-        ASSERT(sent == len);
+//		if (r->method_number == M_GET) 
+			encrypt_data_stream(next, len);
+		sent = fcgi_buf_add_block(fr->clientOutputBuffer, next, len);
+		ASSERT(sent == len);
     }
 
     return NULL;
@@ -868,36 +868,24 @@ static int read_from_client_n_queue(fcgi_request *fr)
     char *end;
     int count;
     long int countRead;
-	char *encBuf, *buf;
-
-	buf = malloc(SERVER_BUFSIZE+CRYPT_BLOCK_SIZE);
 
     while (BufferFree(fr->clientInputBuffer) > 0 || BufferFree(fr->serverOutputBuffer) > 0) {
         fcgi_protocol_queue_client_buffer(fr);
 
 		if (fr->expectingClientContent <= 0) {
-			free(buf);
             return OK;
 		}
 
         fcgi_buf_get_free_block_info(fr->clientInputBuffer, &end, &count);
 		if (count == 0) {
-			free(buf);
             return OK;
 		}
 
-		// Encrypt data
-		count -= CRYPT_BLOCK_SIZE;
-		if (count <= 0) {
-			free(buf);
-			return OK;
-		}
-		if ((countRead = ap_get_client_block(fr->r, buf, count)) < 0)
+		if ((countRead = ap_get_client_block(fr->r, end, count)) < 0)
         {
             /* set the header scan state to done to prevent logging an error 
              * - hokey approach - probably should be using a unique value */
             fr->parseHeader = SCAN_CGI_FINISHED;
-			free(buf);
             return -1;
         }
 
@@ -905,15 +893,11 @@ static int read_from_client_n_queue(fcgi_request *fr)
             fr->expectingClientContent = 0;
         }
         else {
- 			encBuf = encrypt_data(buf, &countRead);
- 			memcpy(end, encBuf, countRead);
- 			free(encBuf);
-
+			encrypt_data_stream(end, countRead);
             fcgi_buf_add_update(fr->clientInputBuffer, countRead);
             ap_reset_timeout(fr->r);
         }
     }
-	free(buf);
     return OK;
 }
 

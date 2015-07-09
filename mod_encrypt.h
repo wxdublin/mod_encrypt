@@ -61,7 +61,7 @@
 /* size of the buffer the PM uses to read records from the request handlers */
 #define FCGI_MSGS_BUFSIZE  32 * 512
 
-#define SERVER_BUFSIZE 8192
+#define SERVER_BUFSIZE (8192*1024)
 
 /* Dynamic Encrypt applications */
 #define FCGI_DEFAULT_MAX_PROCS  50         /* maximum number of processes that

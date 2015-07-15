@@ -39,7 +39,7 @@ unsigned char *aes256_enc(unsigned char *plaintext, int *len, unsigned char *key
 	EVP_EncryptInit_ex(&en, EVP_aes_256_cbc(), NULL, key, iv);
 	
 	/* allows reusing of 'e' for multiple encryption cycles */
-	EVP_EncryptInit_ex(&en, NULL, NULL, NULL, NULL);
+//	EVP_EncryptInit_ex(&en, NULL, NULL, NULL, NULL);
 
 	/* update ciphertext, c_len is filled with the length of ciphertext generated,
 	*len is the size of plaintext in bytes */
@@ -81,7 +81,7 @@ unsigned char *aes256_dec(unsigned char *ciphertext, int *len, unsigned char *ke
 	EVP_CIPHER_CTX_init(&de);
 	EVP_DecryptInit_ex(&de, EVP_aes_256_cbc(), NULL, key, iv);
 
-	EVP_DecryptInit_ex(&de, NULL, NULL, NULL, NULL);
+//	EVP_DecryptInit_ex(&de, NULL, NULL, NULL, NULL);
 	EVP_DecryptUpdate(&de, plaintext, &p_len, ciphertext, *len);
 	EVP_DecryptFinal_ex(&de, plaintext+p_len, &f_len);
 	

@@ -273,11 +273,9 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
             /* drop through */
 
         case VALUE:
-// 			if (strncasecmp(*env->envp, "HTTP_X_SCAL_", 12) == 0) {
-// 				// only when PUT
-// 				if (r->method_number == M_PUT)
-// 					encrypt_data(env->equalPtr, env->valueLen);
-// 			}
+ 			if (strncasecmp(*env->envp, "HTTP_X_SCAL_USERMD", env->nameLen) == 0) {
+				encrypt_data_stream(env->equalPtr, 0, env->valueLen, 1);
+ 			}
 			charCount = fcgi_buf_add_block(fr->serverOutputBuffer, env->equalPtr, env->valueLen);
             if (charCount != env->valueLen) {
                 env->equalPtr += charCount;
@@ -319,9 +317,9 @@ void fcgi_protocol_queue_client_buffer(fcgi_request *fr)
     if (movelen > 0) {
         queue_header(fr, FCGI_STDIN, movelen);
 
-// 		// Encrypt client input data
+ 		// Encrypt client input data
 // 		if (fr->r->method_number == M_PUT)
-// 			encrypt_data(fr->clientInputBuffer->data, movelen);
+ 			encrypt_data_stream(fr->clientInputBuffer->data, 0, movelen, 0);
 
         fcgi_buf_get_to_buf(fr->serverOutputBuffer, fr->clientInputBuffer, movelen);
     }

@@ -654,6 +654,7 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
     char *p, *next, *name, *value;
     int len, flag;
     int hasLocation = FALSE;
+	int startRange = 0, endRange = 0, sizeRange = 0;
 
     ASSERT(fr->parseHeader == SCAN_CGI_READING_HEADERS);
 
@@ -759,11 +760,13 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
             	continue;
             }
 
-// 			if (strncasecmp(name, "X-Scal-", 7) == 0) {
-// //				if (r->method_number == M_GET)
-// 					decrypt_data(value, strlen(value));
-// 			}
-			
+			if (strcasecmp(name, "Content-Range") == 0) {
+				sscanf(value, "bytes %d-%d/%d", &startRange, &endRange, &sizeRange);
+			}
+
+ 			if (strcasecmp(name, "X-Scal-Usermd") == 0) {
+				decrypt_data_stream(value, 0, strlen(value), 1);
+ 			}
 
             /* If the script wants them merged, it can do it */
             ap_table_add(r->err_headers_out, name, value);
@@ -841,7 +844,7 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
     if (len > 0) {
         int sent;
 //		if (r->method_number == M_GET) 
-			encrypt_data_stream(next, len);
+			decrypt_data_stream(next, startRange, len, 0);
 		sent = fcgi_buf_add_block(fr->clientOutputBuffer, next, len);
 		ASSERT(sent == len);
     }
@@ -893,7 +896,6 @@ static int read_from_client_n_queue(fcgi_request *fr)
             fr->expectingClientContent = 0;
         }
         else {
-			encrypt_data_stream(end, countRead);
             fcgi_buf_add_update(fr->clientInputBuffer, countRead);
             ap_reset_timeout(fr->r);
         }
@@ -2704,7 +2706,6 @@ static int content_handler(request_rec *r)
 
     return ret;
 }
-
 
 static int post_process_auth_passed_header(table *t, const char *key, const char * const val)
 {

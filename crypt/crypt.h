@@ -9,8 +9,9 @@
 
 char *encrypt_data(char *data, int *len);
 char *decrypt_data(char *data, int *len);
-void encrypt_data_stream(char *data, int offset, int len, int csc);
-void decrypt_data_stream(char *data, int offset, int len, int csc);
+void *InitCrypt(void);
+void CloseCrypt(void *ctx);
+void CryptDataStream(void *ctx, char *data, int offset, int len);
 
 #endif  /* CRYPT_H */
 

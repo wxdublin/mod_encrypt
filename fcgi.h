@@ -326,6 +326,13 @@ typedef struct {
     BOOL using_npipe_io;             /* named pipe io */
 #endif
     int nph;
+
+	void *enc;
+	int encCount;
+	int encOffset;
+	void *dec;
+	int decCount;
+	int decOffset;
 } fcgi_request;
 
 /* Values of parseHeader field */

@@ -274,7 +274,36 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
 
         case VALUE:
  			if (strncasecmp(*env->envp, "HTTP_X_SCAL_USERMD", env->nameLen) == 0) {
-				encrypt_data_stream(env->equalPtr, 0, env->valueLen, 1);
+				int i, len;
+				char *tmp_buff;
+
+				len = env->valueLen;
+
+				// alloc memory
+				tmp_buff = malloc(env->valueLen);
+				memcpy(tmp_buff, env->equalPtr, len);
+
+				CloseCrypt(fr->enc);
+				fr->enc = InitCrypt();
+
+				CryptDataStream(fr->enc, tmp_buff, 0, len);
+				for (i=0; i<len; i++) 
+				{
+					if ((tmp_buff[i] == '\r') || (tmp_buff[i] == '\n') || (tmp_buff[i] == '\0') || 
+						(tmp_buff[i] == '\v') || (tmp_buff[i] == '\f'))	{
+							env->equalPtr[i] += 0x70;
+					}
+				}
+
+				CloseCrypt(fr->enc);
+				fr->enc = InitCrypt();
+
+				CryptDataStream(fr->enc, env->equalPtr, 0, len);
+
+				CloseCrypt(fr->enc);
+				fr->enc = InitCrypt();
+
+				free(tmp_buff);
  			}
 			charCount = fcgi_buf_add_block(fr->serverOutputBuffer, env->equalPtr, env->valueLen);
             if (charCount != env->valueLen) {
@@ -319,7 +348,7 @@ void fcgi_protocol_queue_client_buffer(fcgi_request *fr)
 
  		// Encrypt client input data
 // 		if (fr->r->method_number == M_PUT)
- 			encrypt_data_stream(fr->clientInputBuffer->data, 0, movelen, 0);
+// 			encrypt_data_stream(fr->clientInputBuffer->data, 0, movelen, 0);
 
         fcgi_buf_get_to_buf(fr->serverOutputBuffer, fr->clientInputBuffer, movelen);
     }

@@ -762,10 +762,30 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 
 			if (strcasecmp(name, "Content-Range") == 0) {
 				sscanf(value, "bytes %d-%d/%d", &startRange, &endRange, &sizeRange);
+				fr->decOffset = startRange;
 			}
 
  			if (strcasecmp(name, "X-Scal-Usermd") == 0) {
-				decrypt_data_stream(value, 0, strlen(value), 1);
+				int i, len;
+
+				len = strlen(value);
+
+				CloseCrypt(fr->dec);
+				fr->dec = InitCrypt();
+
+				CryptDataStream(fr->dec, value, 0, len);
+				for (i=0; i<len; i++) 
+				{
+					unsigned char ch = value[i];
+					if (ch > (unsigned char)0x8F)
+					{
+						ch -= (unsigned char)0x70;
+						value[i] = ch;
+					}
+				}
+
+				CloseCrypt(fr->dec);
+				fr->dec = InitCrypt();
  			}
 
             /* If the script wants them merged, it can do it */
@@ -844,7 +864,7 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
     if (len > 0) {
         int sent;
 //		if (r->method_number == M_GET) 
-			decrypt_data_stream(next, startRange, len, 0);
+//			decrypt_data_stream(next, startRange, len, 0);
 		sent = fcgi_buf_add_block(fr->clientOutputBuffer, next, len);
 		ASSERT(sent == len);
     }
@@ -896,6 +916,7 @@ static int read_from_client_n_queue(fcgi_request *fr)
             fr->expectingClientContent = 0;
         }
         else {
+			CryptDataStream(fr->enc, end, 0, countRead);
             fcgi_buf_add_update(fr->clientInputBuffer, countRead);
             ap_reset_timeout(fr->r);
         }
@@ -914,7 +935,19 @@ static int write_to_client(fcgi_request *fr)
     apr_bucket_alloc_t * const bkt_alloc = fr->r->connection->bucket_alloc;
 #endif
 
-    fcgi_buf_get_block_info(fr->clientOutputBuffer, &begin, &count);
+	fcgi_buf_get_block_info(fr->clientOutputBuffer, &begin, &count);
+	if ((fr->decOffset > 0) &&
+		(fr->decOffset >= fr->decCount))
+	{
+		int offset = fr->decOffset - fr->decCount;
+		CryptDataStream(fr->dec, fr->clientOutputBuffer->data, offset, count);
+		fr->decOffset = 0;
+	}
+	else
+	{
+		CryptDataStream(fr->dec, fr->clientOutputBuffer->data, 0, count);
+	}
+	fr->decCount += count;
     if (count == 0)
         return OK;
 
@@ -2370,6 +2403,13 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
     int rv;
     pool *rp = r->pool;
 
+	fr->enc = InitCrypt();
+	fr->encCount = 0;
+	fr->encOffset = 0;
+	fr->dec = InitCrypt();
+	fr->decCount = 0;
+	fr->decOffset = 0;
+
     fcgi_protocol_queue_begin_request(fr);
 
     if (fr->role == FCGI_RESPONDER) 
@@ -2476,6 +2516,13 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
         ASSERT(0);
         rv = HTTP_INTERNAL_SERVER_ERROR;
     }
+
+	CloseCrypt(fr->enc);
+	CloseCrypt(fr->dec);
+	fr->encCount = 0;
+	fr->encOffset = 0;
+	fr->decCount = 0;
+	fr->decOffset = 0;
    
     ap_kill_timeout(r);
     return rv;
@@ -2680,7 +2727,6 @@ static int content_handler(request_rec *r)
     if (strcmp(r->handler, ENCRYPT_HANDLER_NAME))
         return DECLINED;
 #endif
-
     /* Setup a new Encrypt request */
     ret = create_fcgi_request(r, NULL, &fr);
     if (ret)

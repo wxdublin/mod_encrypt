@@ -10,7 +10,7 @@ killconf () {
   src=/etc/apache/httpd.conf
   dst=/etc/apache/httpd.conf.tmp.$$
   if [ -s $src ] ; then
-    sed 's/^\(LoadModule.*mod_fastcgi\.so\)/# \1/' $src > $dst
+    sed 's/^\(LoadModule.*mod_encrypt\.so\)/# \1/' $src > $dst
     mv -f $dst $src
     ask_restart
   fi
@@ -19,7 +19,7 @@ killconfssl () {
   src=/etc/apache-ssl/httpd.conf
   dst=/etc/apache-ssl/httpd.conf.tmp.$$
   if [ -s $src ] ; then
-    sed 's/^\(LoadModule.*mod_fastcgi\.so\)/# \1/' $src > $dst
+    sed 's/^\(LoadModule.*mod_encrypt\.so\)/# \1/' $src > $dst
     mv -f $src $dst
     ask_restartssl
   fi

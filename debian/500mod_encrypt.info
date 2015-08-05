@@ -1,0 +1,16 @@
+LoadModule: encrypt_module /usr/lib/apache2/modules/mod_encrypt.so
+Directives:
+ EncryptServer
+ EncryptConfig
+ EncryptExternalServer
+ EncryptIpcDir
+ EncryptSuexec
+ EncryptAuthenticator
+ EncryptAuthenticatorAuthoritative
+ EncryptAuthorizer
+ EncryptAuthorizerAuthoritative
+ EncryptAccessChecker
+ EncryptAccessCheckerAuthoritative
+Handles:
+ encrypt-script
+Description: Support for Encrypt

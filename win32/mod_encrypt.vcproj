@@ -121,8 +121,8 @@
 		</Configuration>
 		<Configuration
 			Name="Release|x64"
-			OutputDirectory=".\bin"
-			IntermediateDirectory=".\Release"
+			OutputDirectory="F:\FastCGI\Apache24\modules"
+			IntermediateDirectory="$(PlatformName)\$(ConfigurationName)"
 			ConfigurationType="2"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
@@ -154,8 +154,8 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				InlineFunctionExpansion="1"
-				AdditionalIncludeDirectories="C:\Apache24\include;..\src;.\sqlite3;"
-				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;"
+				AdditionalIncludeDirectories="F:\FastCGI\Apache24\include;..\src;.\libcurl\include;.\openssl\include;.\;"
+				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;CURL_STATICLIB;"
 				StringPooling="true"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
@@ -182,12 +182,14 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="ws2_32.lib winmm.lib apr-1.lib libapr-1.lib aprutil-1.lib libapriconv-1.lib libaprutil-1.lib libhttpd.lib libeay32_.lib ssleay32_.lib"
 				OutputFile="$(OutDir)\$(ProjectName).so"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
-				AdditionalLibraryDirectories="C:\Apache24\lib"
+				AdditionalLibraryDirectories="F:\FastCGI\Apache24\lib;.\openssl\lib"
+				IgnoreDefaultLibraryNames="msvcrt.lib"
 				GenerateDebugInformation="true"
-				ProgramDatabaseFile=".\Release/mod_uma.pdb"
+				ProgramDatabaseFile=".\Debug\mod_encrypt.pdb"
 				SubSystem="2"
 				OptimizeReferences="2"
 				BaseAddress=""
@@ -323,7 +325,7 @@
 		</Configuration>
 		<Configuration
 			Name="Debug|x64"
-			OutputDirectory="F:\Gluu\Apache24\modules"
+			OutputDirectory="F:\FastCGI\Apache24\modules"
 			IntermediateDirectory="$(PlatformName)\$(ConfigurationName)"
 			ConfigurationType="2"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
@@ -355,13 +357,13 @@
 				Name="VCCLCompilerTool"
 				AdditionalOptions="/EHsc "
 				Optimization="0"
-				AdditionalIncludeDirectories="F:\Gluu\Apache24\include;..\src;.\libcurl\include;.\openssl\include;"
+				AdditionalIncludeDirectories="F:\FastCGI\Apache24\include;..\src;.\libcurl\include;.\openssl\include;.\;"
 				PreprocessorDefinitions="_DEBUG;WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;CURL_STATICLIB;"
 				RuntimeLibrary="3"
-				PrecompiledHeaderFile=".\Debug/mod_uma.pch"
+				PrecompiledHeaderFile=""
 				AssemblerListingLocation=".\Debug/"
 				ObjectFile=".\Debug/"
-				ProgramDataBaseFileName="Debug\mod_uma_src"
+				ProgramDataBaseFileName="Debug\mod_encrypt_src"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
 				DebugInformationFormat="3"
@@ -381,14 +383,15 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="ws2_32.lib winmm.lib apr-1.lib libapr-1.lib aprutil-1.lib libapriconv-1.lib libaprutil-1.lib libhttpd.lib libeay32_.lib ssleay32_.lib"
+				AdditionalDependencies="ws2_32.lib winmm.lib apr-1.lib libapr-1.lib aprutil-1.lib libapriconv-1.lib libaprutil-1.lib libhttpd.lib libeay32.lib ssleay32.lib"
 				OutputFile="$(OutDir)\$(ProjectName).so"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
-				AdditionalLibraryDirectories="F:\Gluu\Apache24\lib;.\openssl\lib"
-				IgnoreDefaultLibraryNames="msvcrt.lib"
+				AdditionalLibraryDirectories="F:\FastCGI\Apache24\lib;.\openssl\lib;..\crypt\aesni"
+				IgnoreAllDefaultLibraries="false"
+				IgnoreDefaultLibraryNames="LIBCMT"
 				GenerateDebugInformation="true"
-				ProgramDatabaseFile=".\Debug/mod_uma.pdb"
+				ProgramDatabaseFile=".\Debug\mod_encrypt.pdb"
 				SubSystem="2"
 				BaseAddress=""
 				RandomizedBaseAddress="1"
@@ -408,7 +411,7 @@
 			<Tool
 				Name="VCBscMakeTool"
 				SuppressStartupBanner="true"
-				OutputFile=".\Debug/mod_uma.bsc"
+				OutputFile=".\Debug\mod_encrypt.bsc"
 			/>
 			<Tool
 				Name="VCFxCopTool"
@@ -429,6 +432,14 @@
 		<Filter
 			Name="Source Files"
 			>
+			<File
+				RelativePath="..\aes256.c"
+				>
+			</File>
+			<File
+				RelativePath="..\aes256.h"
+				>
+			</File>
 			<File
 				RelativePath="..\crypt.c"
 				>

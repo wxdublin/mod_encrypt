@@ -2,12 +2,12 @@
 # this is used/needed by the APACHE2 build system
 #
 
-MOD_FASTCGI = mod_fastcgi fcgi_pm fcgi_util fcgi_protocol fcgi_buf fcgi_config
+MOD_ENCRYPT = mod_encrypt fcgi_pm fcgi_util fcgi_protocol fcgi_buf fcgi_config crypt aes256
 
-mod_fastcgi.la: ${MOD_FASTCGI:=.slo}
-	$(SH_LINK) -rpath $(libexecdir) -module -avoid-version ${MOD_FASTCGI:=.lo}
+mod_encrypt.la: ${MOD_ENCRYPT:=.slo}
+	$(SH_LINK) -rpath $(libexecdir) -module -avoid-version ${MOD_ENCRYPT:=.lo} -lssl -lcrypto
 
 DISTCLEAN_TARGETS = modules.mk
 
-shared =  mod_fastcgi.la
+shared =  mod_encrypt.la
 

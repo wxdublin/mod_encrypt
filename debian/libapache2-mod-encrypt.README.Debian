@@ -1,0 +1,29 @@
+
+Config Tips
+----------------------
+
+ * How to run your Encrypt app
+
+   In case that Encrypt script has ".fcgi" suffix, you just put the script
+   in /usr/lib/cgi-bin (or other directory has "+ExecCGI") and can run it.
+
+ * Using non-".fcgi" suffix
+
+   If your app have non-".fcgi" suffix, add AddHandler/SetHandler to httpd.conf.
+   For exapmple;
+   ---
+     <Directory /var/www/myencryptapp>
+       AddHandler encrypt-script .yourext .pl .rb .cgi .sh
+     </Directory>
+   ---
+
+ * How to run under SuExec
+
+   make enable following line;
+     #EncryptWrapper /usr/lib/apache2/suexec
+   in /etc/apache2/mods-enabled/encrypt.conf
+
+ * If you change apache's uid
+
+   You need to change owner of /var/lib/apache*/encrypt to uid of apache run.
+

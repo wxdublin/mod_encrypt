@@ -183,22 +183,6 @@
 #endif                           /* must accomodate uid printed as %ld too */
 #define MAX_GID_CHAR_LEN 15      /* Max #chars in a gid printed as %ld */
 
-#ifndef TRUE
-#define TRUE  (1)
-#endif
-
-#ifndef FALSE
-#define FALSE (0)
-#endif
-
-#ifndef min
-#define min(a,b) ((a) < (b) ? (a) : (b))
-#endif
-
-#ifndef max
-#define max(a,b) ((a) > (b) ? (a) : (b))
-#endif
-
 #ifdef APACHE2
 
 #define get_signal_text(a)  apr_signal_description_get(a)

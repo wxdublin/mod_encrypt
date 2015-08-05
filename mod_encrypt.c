@@ -85,7 +85,7 @@
 #endif
 #endif
 
-#include "crypt/crypt.h"
+#include "crypt.h"
 
 #ifndef timersub
 #define	timersub(a, b, result)                              \
@@ -649,6 +649,19 @@ static void close_connection_to_fs(fcgi_request *fr)
  *----------------------------------------------------------------------
  */
 
+static unsigned char gKeyData[] = \
+"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
+"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
+"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
+"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
+"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
+"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
+"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
+"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
+"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
+"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr";
+static int gKeyLen = 512;
+
 static const char *process_headers(request_rec *r, fcgi_request *fr)
 {
     char *p, *next, *name, *value;
@@ -771,7 +784,7 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 				len = strlen(value);
 
 				CloseCrypt(fr->dec);
-				fr->dec = InitCrypt();
+				fr->dec = InitCrypt(gKeyData, gKeyLen);
 
 				CryptDataStream(fr->dec, value, 0, len);
 				for (i=0; i<len; i++) 
@@ -785,7 +798,7 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 				}
 
 				CloseCrypt(fr->dec);
-				fr->dec = InitCrypt();
+				fr->dec = InitCrypt(gKeyData, gKeyLen);
  			}
 
             /* If the script wants them merged, it can do it */
@@ -863,8 +876,6 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 
     if (len > 0) {
         int sent;
-//		if (r->method_number == M_GET) 
-//			decrypt_data_stream(next, startRange, len, 0);
 		sent = fcgi_buf_add_block(fr->clientOutputBuffer, next, len);
 		ASSERT(sent == len);
     }
@@ -2403,10 +2414,10 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
     int rv;
     pool *rp = r->pool;
 
-	fr->enc = InitCrypt();
+	fr->enc = InitCrypt(gKeyData, gKeyLen);
 	fr->encCount = 0;
 	fr->encOffset = 0;
-	fr->dec = InitCrypt();
+	fr->dec = InitCrypt(gKeyData, gKeyLen);
 	fr->decCount = 0;
 	fr->decOffset = 0;
 

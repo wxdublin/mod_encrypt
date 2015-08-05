@@ -1,5 +1,5 @@
-<IfModule mod_fastcgi.c>
-  AddHandler fastcgi-script .fcgi
-  #FastCgiWrapper /usr/lib/apache2/suexec
-  FastCgiIpcDir /var/lib/apache2/fastcgi
+<IfModule mod_encrypt.c>
+  AddHandler encrypt-script .fcgi
+  #EncryptWrapper /usr/lib/apache2/suexec
+  EncryptIpcDir /var/lib/apache2/fastcgi
 </IfModule>

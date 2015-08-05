@@ -1,25 +1,25 @@
 # 
-# Makefile.tmpl for the mod_fastcgi module
+# Makefile.tmpl for the mod_encrypt module
 #
 #   Apache v1.3's Configure uses this to create a Makefile 
 # 
 # $Id: Makefile.tmpl,v 1.6 2000/08/16 01:51:47 robs Exp $
 
-LIB=libfastcgi.$(LIBEXT)
+LIB=libencrypt.$(LIBEXT)
 
-OBJS=mod_fastcgi.o fcgi_buf.o fcgi_pm.o fcgi_protocol.o	fcgi_config.o fcgi_util.o
+OBJS=mod_encrypt.o fcgi_buf.o fcgi_pm.o fcgi_protocol.o	fcgi_config.o fcgi_util.o ./crypt/crypt.o ./crypt/aes256/aes256.o
 
 # Build commands
 
 all:  lib
 lib: $(LIB)
 
-libfastcgi.a: $(OBJS)
+libencrypt.a: $(OBJS)
 	rm -f $@
 	ar cr $@ $(OBJS)
 	$(RANLIB) $@
  
-libfastcgi.so: $(OBJS)
+libencrypt.so: $(OBJS)
 	rm -f $@
 	$(LD_SHLIB) $(LDFLAGS_SHLIB) -o $@ $(OBJS)
 
@@ -46,8 +46,10 @@ depend:
 # Dependencies
 
 $(OBJS): fcgi.h           \
-         mod_fastcgi.h    \
+         mod_encrypt.h    \
          fcgi_protocol.h  \
+         crypt/crypt.h \
+         crypt/aes256/aes256.h
      $(INCDIR)/httpd.h               \
      $(INCDIR)/http_config.h         \
      $(INCDIR)/http_request.h        \

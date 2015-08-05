@@ -6,7 +6,7 @@ set -e
 # These functions ask the user whether to reconfigure apache/apachessl.
 do_enable () {
   if [ -s /etc/apache/httpd.conf ] ; then
-    if grep '^LoadModule.*mod_fastcgi\.so' /etc/apache/httpd.conf 2>&1 >/dev/null
+    if grep '^LoadModule.*mod_encrypt\.so' /etc/apache/httpd.conf 2>&1 >/dev/null
     then
       exit 0
     fi
@@ -27,7 +27,7 @@ do_enable () {
 
 do_enablessl () {
   if [ -s /etc/apache-ssl/httpd.conf ] ; then
-    if grep '^LoadModule.*mod_fastcgi\.so' /etc/apache-ssl/httpd.conf 2>&1 >/dev/null ; then
+    if grep '^LoadModule.*mod_encrypt\.so' /etc/apache-ssl/httpd.conf 2>&1 >/dev/null ; then
       exit 0
     fi
   fi

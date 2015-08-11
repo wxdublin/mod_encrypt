@@ -513,7 +513,7 @@ const char *fcgi_config_set_socket_dir(cmd_parms *cmd, void *dummy, const char *
 
     return NULL;
 }
-
+
 /*******************************************************************************
  * Enable, disable, or specify the path to a wrapper used to invoke all
  * Encrypt applications.

@@ -357,8 +357,8 @@
 				Name="VCCLCompilerTool"
 				AdditionalOptions="/EHsc "
 				Optimization="0"
-				AdditionalIncludeDirectories="F:\FastCGI\Apache24\include;..\src;.\libcurl\include;.\openssl\include;.\;"
-				PreprocessorDefinitions="_DEBUG;WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;CURL_STATICLIB;"
+				AdditionalIncludeDirectories="F:\FastCGI\Apache24\include;..\src;.\jansson;.\libcurl\include;.\openssl\include;.\;"
+				PreprocessorDefinitions="_DEBUG;WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;CURL_STATICLIB;HAVE_STDINT_H"
 				RuntimeLibrary="3"
 				PrecompiledHeaderFile=""
 				AssemblerListingLocation=".\Debug/"
@@ -477,6 +477,14 @@
 				>
 			</File>
 			<File
+				RelativePath="..\json.c"
+				>
+			</File>
+			<File
+				RelativePath="..\json.h"
+				>
+			</File>
+			<File
 				RelativePath="..\mod_encrypt.c"
 				>
 			</File>
@@ -484,6 +492,86 @@
 				RelativePath="..\mod_encrypt.h"
 				>
 			</File>
+			<Filter
+				Name="jansson"
+				>
+				<File
+					RelativePath=".\jansson\dump.c"
+					>
+				</File>
+				<File
+					RelativePath=".\jansson\error.c"
+					>
+				</File>
+				<File
+					RelativePath=".\jansson\hashtable.c"
+					>
+				</File>
+				<File
+					RelativePath=".\jansson\hashtable.h"
+					>
+				</File>
+				<File
+					RelativePath=".\jansson\hashtable_seed.c"
+					>
+				</File>
+				<File
+					RelativePath=".\jansson\jansson.h"
+					>
+				</File>
+				<File
+					RelativePath=".\jansson\jansson_config.h"
+					>
+				</File>
+				<File
+					RelativePath=".\jansson\jansson_private.h"
+					>
+				</File>
+				<File
+					RelativePath=".\jansson\load.c"
+					>
+				</File>
+				<File
+					RelativePath=".\jansson\lookup3.h"
+					>
+				</File>
+				<File
+					RelativePath=".\jansson\memory.c"
+					>
+				</File>
+				<File
+					RelativePath=".\jansson\pack_unpack.c"
+					>
+				</File>
+				<File
+					RelativePath=".\jansson\stdint.h"
+					>
+				</File>
+				<File
+					RelativePath=".\jansson\strbuffer.c"
+					>
+				</File>
+				<File
+					RelativePath=".\jansson\strbuffer.h"
+					>
+				</File>
+				<File
+					RelativePath=".\jansson\strconv.c"
+					>
+				</File>
+				<File
+					RelativePath=".\jansson\utf.c"
+					>
+				</File>
+				<File
+					RelativePath=".\jansson\utf.h"
+					>
+				</File>
+				<File
+					RelativePath=".\jansson\value.c"
+					>
+				</File>
+			</Filter>
 		</Filter>
 	</Files>
 	<Globals>

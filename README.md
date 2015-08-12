@@ -7,8 +7,10 @@ mod_encrypt
 Overview
 --------
 
-This module enables [mod_fastcgi](http://www.fastcgi.com/mod_fastcgi/docs/mod_fastcgi.html) to encrypt/decrypt data between client and FastCGI application.
-It support [mod_fastcgi](http://www.fastcgi.com/mod_fastcgi/docs/mod_fastcgi.html) entirely and add some features for data encrypt.
+This module enables [mod_fastcgi](http://www.fastcgi.com/mod_fastcgi/docs/mod_fastcgi.html) 
+to encrypt/decrypt data between client and FastCGI application.
+It support [mod_fastcgi](http://www.fastcgi.com/mod_fastcgi/docs/mod_fastcgi.html) entirely 
+and add some features for data encrypt.
 
 The encryption engine is AES CTR 256 from OpenSSL.
 
@@ -28,14 +30,12 @@ It support all the directives used by [mod_fastcgi](http://www.fastcgi.com/mod_f
 
 This is the simple example how to use mod_encyrpt :
 
-'''
       LoadModule encrypt_module modules/mod_encrypt.so
       <IfModule encrypt_module>
           AddHandler encrypt-script .fcgi
           FastCgiExternalServer /var/www/html/myFCGI -host 192.168.0.1:3000
       </IfModule>
-'''
-      
+
 myFCGI and host IP/Port should be changed in your case.
 You can test it using curl.
 $ curl -v -XPUT http://localhost/myFCGI --data-binary teststring

@@ -8,7 +8,7 @@ Overview
 --------
 
 This module enables [mod_fastcgi](http://www.fastcgi.com/mod_fastcgi/docs/mod_fastcgi.html) 
-to encrypt/decrypt data between client and FastCGI application.
+to encrypt/decrypt data between client and FastCGI application.  
 It support [mod_fastcgi](http://www.fastcgi.com/mod_fastcgi/docs/mod_fastcgi.html) entirely 
 and add some features for data encrypt.
 
@@ -19,8 +19,8 @@ encryption key. This ciphertext is passed to FastCGI application.
 - **mod_encrypt** receive ciphertext from FastCGI application and decrypt it 
 using the client-specific encryption key. This plaintext is passed to client.
 
-The encryption key is managed only by **mod_encrypt**.
-Client and FastCGI can not know about that at all.
+The encryption key is managed only by **mod_encrypt**.  
+Client and FastCGI can not know about that at all.  
 This is very effective to store client-specific data in the cloud storage using [mod_fastcgi](http://www.fastcgi.com/mod_fastcgi/docs/mod_fastcgi.html).
 
 How to Use It  

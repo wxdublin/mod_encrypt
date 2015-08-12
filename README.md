@@ -40,4 +40,4 @@ myFCGI and host IP/Port should be changed in your case.
 You can test it using curl.
 $ curl -v -XPUT http://localhost/myFCGI --data-binary teststring
 
-The new directives to encyption are in working!
+The new directives for encyption are in working!

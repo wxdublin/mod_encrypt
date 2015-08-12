@@ -36,8 +36,8 @@ This is the simple example how to use mod_encyrpt :
           FastCgiExternalServer /var/www/html/myFCGI -host 192.168.0.1:3000
       </IfModule>
 
-myFCGI and host IP/Port should be changed in your case.\n
-You can test it using curl.\n
-$ curl -v -XPUT http://localhost/myFCGI --data-binary teststring\n
+myFCGI and host IP/Port should be changed in your case.  
+You can test it using curl.  
+$ curl -v -XPUT http://localhost/myFCGI --data-binary teststring  
 
 The new directives for encyption are in working!

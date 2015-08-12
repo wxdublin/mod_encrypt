@@ -27,7 +27,6 @@
     Add an entry to httpd.conf like this:
 
       LoadModule encrypt_module modules/mod_encrypt.so
- 
 
   WIN
   ===

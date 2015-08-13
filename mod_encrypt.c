@@ -86,6 +86,7 @@
 #endif
 
 #include "crypt.h"
+#include "json.h"
 
 #ifndef timersub
 #define	timersub(a, b, result)                              \
@@ -2746,6 +2747,10 @@ static int content_handler(request_rec *r)
 {
     fcgi_request *fr = NULL;
     int ret;
+    void *jsonhandler;
+
+    jsonhandler = json_load("{\"key\":\"value\"}");
+    json_unload(jsonhandler);
 
 #ifdef APACHE2
     if (strcmp(r->handler, ENCRYPT_HANDLER_NAME))

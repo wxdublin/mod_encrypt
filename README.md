@@ -34,8 +34,8 @@ This is the simple example how to use mod_encyrpt :
       <IfModule encrypt_module>
           AddHandler encrypt-script .fcgi
           FastCgiExternalServer /var/www/html/myFCGI -host 192.168.0.1:3000
-	  FastCgiEncrypt On
-	  FastCgiDecrypt On
+          FastCgiEncrypt On
+          FastCgiDecrypt On
       </IfModule>
 
 myFCGI and host IP/Port should be changed in your case.  

@@ -613,6 +613,16 @@ extern gid_t fcgi_group_id;                      /* the run gid of Apache & PM *
 
 extern fcgi_server *fcgi_servers;
 
+#ifndef BOOL
+typedef int BOOL;
+#endif
+#ifndef TRUE
+#define TRUE 1
+#endif
+#ifndef FALSE
+#define FALSE 0
+#endif
+
 extern BOOL fcgi_encrypt;					/* encrypt flag */
 extern BOOL fcgi_decrypt;					/* decrypt flag */
 

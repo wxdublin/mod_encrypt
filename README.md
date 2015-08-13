@@ -34,10 +34,24 @@ This is the simple example how to use mod_encyrpt :
       <IfModule encrypt_module>
           AddHandler encrypt-script .fcgi
           FastCgiExternalServer /var/www/html/myFCGI -host 192.168.0.1:3000
+	  FastCgiEncrypt On
+	  FastCgiDecrypt On
       </IfModule>
 
 myFCGI and host IP/Port should be changed in your case.  
 You can test it using curl.  
 $ curl -v -XPUT http://localhost/myFCGI --data-binary teststring  
 
-The new directives for encyption are in working!
+# Directives for encyption
+## FastCgiEncrypt
+Syntax: FastCgiEncrypt _On_ / _Off_  
+Default: FastCgiEncrypt On  
+Context: server config  
+
+Enable / Disable the feature of FastCGI encrypt.  
+## FastCgiDecrypt
+Syntax: FastCgiDecrypt _On_ / _Off_  
+Default: FastCgiDecrypt On  
+Context: server config  
+
+Enable / Disable the feature of FastCGI decrypt.  

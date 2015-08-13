@@ -515,6 +515,8 @@ const char *fcgi_config_set_authoritative_slot(cmd_parms * cmd,
     void * dir_config, int arg);
 const char *fcgi_config_set_socket_dir(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_wrapper(cmd_parms *cmd, void *dummy, const char *arg);
+const char *fcgi_config_set_encrypt(cmd_parms *cmd, void *dummy, const char *arg);
+const char *fcgi_config_set_decrypt(cmd_parms *cmd, void *dummy, const char *arg);
 apcb_t fcgi_config_reset_globals(void * dummy);
 const char *fcgi_config_set_env_var(pool *p, char **envp, unsigned int *envc, char * var);
 
@@ -610,6 +612,9 @@ extern uid_t fcgi_user_id;                       /* the run uid of Apache & PM *
 extern gid_t fcgi_group_id;                      /* the run gid of Apache & PM */
 
 extern fcgi_server *fcgi_servers;
+
+extern BOOL fcgi_encrypt;					/* encrypt flag */
+extern BOOL fcgi_decrypt;					/* decrypt flag */
 
 extern char *fcgi_socket_dir;             /* default EncryptIpcDir */
 

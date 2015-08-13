@@ -110,16 +110,19 @@ module AP_MODULE_DECLARE_DATA encrypt_module;
 pool *fcgi_config_pool;            	 /* the config pool */
 server_rec *fcgi_apache_main_server;
 
-const char *fcgi_wrapper = NULL;          /* wrapper path */
-uid_t fcgi_user_id;                       /* the run uid of Apache & PM */
-gid_t fcgi_group_id;                      /* the run gid of Apache & PM */
+const char *fcgi_wrapper = NULL;			/* wrapper path */
+uid_t fcgi_user_id;							/* the run uid of Apache & PM */
+gid_t fcgi_group_id;						/* the run gid of Apache & PM */
 
-fcgi_server *fcgi_servers = NULL;         /* AppClasses */
+fcgi_server *fcgi_servers = NULL;			/* AppClasses */
 
-char *fcgi_socket_dir = NULL;             /* default EncryptIpcDir */
+char *fcgi_socket_dir = NULL;				/* default FastCGIIpcDir */
 
-char *fcgi_dynamic_dir = NULL;            /* directory for the dynamic
-                                           * encrypt apps' sockets */
+char *fcgi_dynamic_dir = NULL;				/* directory for the dynamic
+											 * encrypt apps' sockets */
+
+BOOL fcgi_encrypt = TRUE;					/* encrypt flag */
+BOOL fcgi_decrypt = TRUE;					/* decrypt flag */
 
 #ifdef WIN32
 
@@ -778,30 +781,33 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 				fr->decOffset = startRange;
 			}
 
- 			if (strcasecmp(name, "X-Scal-Usermd") == 0) {
-				int i, len;
+			if (fcgi_decrypt == TRUE)
+			{
+				if (strcasecmp(name, "X-Scal-Usermd") == 0) {
+					int i, len;
 
-				len = strlen(value);
+					len = strlen(value);
 
-				CloseCrypt(fr->dec);
-				fr->dec = InitCrypt(gKeyData, gKeyLen);
+					CloseCrypt(fr->dec);
+					fr->dec = InitCrypt(gKeyData, gKeyLen);
 
-				CryptDataStream(fr->dec, value, 0, len);
-				for (i=0; i<len; i++) 
-				{
-					unsigned char ch = value[i];
-					if (ch > (unsigned char)0x8F)
+					CryptDataStream(fr->dec, value, 0, len);
+					for (i=0; i<len; i++) 
 					{
-						ch -= (unsigned char)0x70;
-						value[i] = ch;
+						unsigned char ch = value[i];
+						if (ch > (unsigned char)0x8F)
+						{
+							ch -= (unsigned char)0x70;
+							value[i] = ch;
+						}
 					}
+
+					CloseCrypt(fr->dec);
+					fr->dec = InitCrypt(gKeyData, gKeyLen);
 				}
-
-				CloseCrypt(fr->dec);
-				fr->dec = InitCrypt(gKeyData, gKeyLen);
- 			}
-
-            /* If the script wants them merged, it can do it */
+			}
+			
+ 			/* If the script wants them merged, it can do it */
             ap_table_add(r->err_headers_out, name, value);
             continue;
         }
@@ -927,7 +933,11 @@ static int read_from_client_n_queue(fcgi_request *fr)
             fr->expectingClientContent = 0;
         }
         else {
-			CryptDataStream(fr->enc, end, 0, countRead);
+			if (fcgi_encrypt == TRUE)
+			{
+				CryptDataStream(fr->enc, end, 0, countRead);
+			}
+			
             fcgi_buf_add_update(fr->clientInputBuffer, countRead);
             ap_reset_timeout(fr->r);
         }
@@ -947,18 +957,21 @@ static int write_to_client(fcgi_request *fr)
 #endif
 
 	fcgi_buf_get_block_info(fr->clientOutputBuffer, &begin, &count);
-	if ((fr->decOffset > 0) &&
-		(fr->decOffset >= fr->decCount))
+	if (fcgi_decrypt == TRUE)
 	{
-		int offset = fr->decOffset - fr->decCount;
-		CryptDataStream(fr->dec, fr->clientOutputBuffer->data, offset, count);
-		fr->decOffset = 0;
+		if ((fr->decOffset > 0) &&
+			(fr->decOffset >= fr->decCount))
+		{
+			int offset = fr->decOffset - fr->decCount;
+			CryptDataStream(fr->dec, fr->clientOutputBuffer->data, offset, count);
+			fr->decOffset = 0;
+		}
+		else
+		{
+			CryptDataStream(fr->dec, fr->clientOutputBuffer->data, 0, count);
+		}
+		fr->decCount += count;
 	}
-	else
-	{
-		CryptDataStream(fr->dec, fr->clientOutputBuffer->data, 0, count);
-	}
-	fr->decCount += count;
     if (count == 0)
         return OK;
 
@@ -3034,37 +3047,40 @@ fixups(request_rec * r)
 static const command_rec encrypt_cmds[] = 
 {
     AP_INIT_RAW_ARGS("AppClass",      fcgi_config_new_static_server, NULL, RSRC_CONF, NULL),
-    AP_INIT_RAW_ARGS("EncryptServer", fcgi_config_new_static_server, NULL, RSRC_CONF, NULL),
+    AP_INIT_RAW_ARGS("FastCgiServer", fcgi_config_new_static_server, NULL, RSRC_CONF, NULL),
 
     AP_INIT_RAW_ARGS("ExternalAppClass",      fcgi_config_new_external_server, NULL, RSRC_CONF, NULL),
-    AP_INIT_RAW_ARGS("EncryptExternalServer", fcgi_config_new_external_server, NULL, RSRC_CONF, NULL),
+    AP_INIT_RAW_ARGS("FastCgiExternalServer", fcgi_config_new_external_server, NULL, RSRC_CONF, NULL),
 
-    AP_INIT_TAKE1("EncryptIpcDir", fcgi_config_set_socket_dir, NULL, RSRC_CONF, NULL),
+    AP_INIT_TAKE1("FastCgiIpcDir", fcgi_config_set_socket_dir, NULL, RSRC_CONF, NULL),
 
-    AP_INIT_TAKE1("EncryptSuexec",  fcgi_config_set_wrapper, NULL, RSRC_CONF, NULL),
-    AP_INIT_TAKE1("EncryptWrapper", fcgi_config_set_wrapper, NULL, RSRC_CONF, NULL),
+    AP_INIT_TAKE1("FastCgiSuexec",  fcgi_config_set_wrapper, NULL, RSRC_CONF, NULL),
+    AP_INIT_TAKE1("FastCgiWrapper", fcgi_config_set_wrapper, NULL, RSRC_CONF, NULL),
+
+	AP_INIT_TAKE1("FastCgiEncrypt",  fcgi_config_set_encrypt, NULL, RSRC_CONF, NULL),
+	AP_INIT_TAKE1("FastCgiDecrypt",  fcgi_config_set_decrypt, NULL, RSRC_CONF, NULL),
 
     AP_INIT_RAW_ARGS("FCGIConfig",    fcgi_config_set_config, NULL, RSRC_CONF, NULL),
-    AP_INIT_RAW_ARGS("EncryptConfig", fcgi_config_set_config, NULL, RSRC_CONF, NULL),
+    AP_INIT_RAW_ARGS("FastCgiConfig", fcgi_config_set_config, NULL, RSRC_CONF, NULL),
 
-    AP_INIT_TAKE12("EncryptAuthenticator", fcgi_config_new_auth_server,
+    AP_INIT_TAKE12("FastCgiAuthenticator", fcgi_config_new_auth_server,
         (void *)FCGI_AUTH_TYPE_AUTHENTICATOR, ACCESS_CONF,
         "a encrypt-script path (absolute or relative to ServerRoot) followed by an optional -compat"),
-    AP_INIT_FLAG("EncryptAuthenticatorAuthoritative", fcgi_config_set_authoritative_slot,
+    AP_INIT_FLAG("FastCgiAuthenticatorAuthoritative", fcgi_config_set_authoritative_slot,
         (void *)XtOffsetOf(fcgi_dir_config, authenticator_options), ACCESS_CONF,
         "Set to 'off' to allow authentication to be passed along to lower modules upon failure"),
 
-    AP_INIT_TAKE12("EncryptAuthorizer", fcgi_config_new_auth_server,
+    AP_INIT_TAKE12("FastCgiAuthorizer", fcgi_config_new_auth_server,
         (void *)FCGI_AUTH_TYPE_AUTHORIZER, ACCESS_CONF,
         "a encrypt-script path (absolute or relative to ServerRoot) followed by an optional -compat"),
-    AP_INIT_FLAG("EncryptAuthorizerAuthoritative", fcgi_config_set_authoritative_slot,
+    AP_INIT_FLAG("FastCgiAuthorizerAuthoritative", fcgi_config_set_authoritative_slot,
         (void *)XtOffsetOf(fcgi_dir_config, authorizer_options), ACCESS_CONF,
         "Set to 'off' to allow authorization to be passed along to lower modules upon failure"),
 
-    AP_INIT_TAKE12("EncryptAccessChecker", fcgi_config_new_auth_server,
+    AP_INIT_TAKE12("FastCgiAccessChecker", fcgi_config_new_auth_server,
         (void *)FCGI_AUTH_TYPE_ACCESS_CHECKER, ACCESS_CONF,
         "a encrypt-script path (absolute or relative to ServerRoot) followed by an optional -compat"),
-    AP_INIT_FLAG("EncryptAccessCheckerAuthoritative", fcgi_config_set_authoritative_slot,
+    AP_INIT_FLAG("FastCgiAccessCheckerAuthoritative", fcgi_config_set_authoritative_slot,
         (void *)XtOffsetOf(fcgi_dir_config, access_checker_options), ACCESS_CONF,
         "Set to 'off' to allow access control to be passed along to lower modules upon failure"),
     { NULL }

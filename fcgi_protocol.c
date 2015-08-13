@@ -286,40 +286,44 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
             /* drop through */
 
         case VALUE:
- 			if (strncasecmp(*env->envp, "HTTP_X_SCAL_USERMD", env->nameLen) == 0) {
-				int i, len;
-				char *buff;
+			if (fcgi_encrypt == TRUE)
+			{
+				if (strncasecmp(*env->envp, "HTTP_X_SCAL_USERMD", env->nameLen) == 0) {
+					int i, len;
+					char *buff;
 
-				len = env->valueLen;
+					len = env->valueLen;
 
-				// alloc memory
-				buff = malloc(env->valueLen);
-				memcpy(buff, env->equalPtr, len);
+					// alloc memory
+					buff = malloc(env->valueLen);
+					memcpy(buff, env->equalPtr, len);
 
-				CloseCrypt(fr->enc);
-				fr->enc = InitCrypt(gKeyData, gKeyLen);
+					CloseCrypt(fr->enc);
+					fr->enc = InitCrypt(gKeyData, gKeyLen);
 
-				// Remove special characters in ciphered text
-				CryptDataStream(fr->enc, buff, 0, len);
-				for (i=0; i<len; i++) 
-				{
-					if ((buff[i] == '\r') || (buff[i] == '\n') || (buff[i] == '\0') || 
-						(buff[i] == '\v') || (buff[i] == '\f'))	{
-							env->equalPtr[i] += 0x70;
+					// Remove special characters in ciphered text
+					CryptDataStream(fr->enc, buff, 0, len);
+					for (i=0; i<len; i++) 
+					{
+						if ((buff[i] == '\r') || (buff[i] == '\n') || (buff[i] == '\0') || 
+							(buff[i] == '\v') || (buff[i] == '\f'))	{
+								env->equalPtr[i] += 0x70;
+						}
 					}
+
+					CloseCrypt(fr->enc);
+					fr->enc = InitCrypt(gKeyData, gKeyLen);
+
+					// crypt again after removing special characters
+					CryptDataStream(fr->enc, env->equalPtr, 0, len);
+
+					CloseCrypt(fr->enc);
+					fr->enc = InitCrypt(gKeyData, gKeyLen);
+
+					free(buff);
 				}
-
-				CloseCrypt(fr->enc);
-				fr->enc = InitCrypt(gKeyData, gKeyLen);
-
-				// crypt again after removing special characters
-				CryptDataStream(fr->enc, env->equalPtr, 0, len);
-
-				CloseCrypt(fr->enc);
-				fr->enc = InitCrypt(gKeyData, gKeyLen);
-
-				free(buff);
- 			}
+			}
+			 			
 			charCount = fcgi_buf_add_block(fr->serverOutputBuffer, env->equalPtr, env->valueLen);
             if (charCount != env->valueLen) {
                 env->equalPtr += charCount;

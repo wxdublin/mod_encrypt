@@ -587,7 +587,61 @@ const char *fcgi_config_set_wrapper(cmd_parms *cmd, void *dummy, const char *arg
 }
 
 /*******************************************************************************
- * Configure a static Encrypt server.
+ * Enable, disable Encrypt feature.
+ */
+const char *fcgi_config_set_encrypt(cmd_parms *cmd, void *dummy, const char *arg)
+{
+    const char *err = NULL;
+
+    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
+    if (err)
+    {
+        return err;
+    }
+
+    if (strcasecmp(arg, "Off") == 0) {
+        fcgi_encrypt = FALSE;
+    }
+	else if (strcasecmp(arg, "On") == 0) {
+        fcgi_encrypt = TRUE;
+    }
+    else {
+		return ap_psprintf(cmd->temp_pool, 
+			"the %s directive should be only Off/On", cmd->cmd->name);
+	}
+
+	return NULL;
+}
+
+/*******************************************************************************
+ * Enable, disable Decrypt applications.
+ */
+const char *fcgi_config_set_decrypt(cmd_parms *cmd, void *dummy, const char *arg)
+{
+    const char *err = NULL;
+
+    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
+    if (err)
+    {
+        return err;
+    }
+
+    if (strcasecmp(arg, "Off") == 0) {
+        fcgi_decrypt = FALSE;
+    }
+	else if (strcasecmp(arg, "On") == 0) {
+        fcgi_decrypt = TRUE;
+    }
+    else {
+		return ap_psprintf(cmd->temp_pool, 
+			"the %s directive should be only Off/On", cmd->cmd->name);
+	}
+
+	return NULL;
+}
+
+/*******************************************************************************
+ * Configure a static FastCGI server.
  */
 const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const char *arg)
 {

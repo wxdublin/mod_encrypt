@@ -587,6 +587,25 @@ const char *fcgi_config_set_wrapper(cmd_parms *cmd, void *dummy, const char *arg
 }
 
 /*******************************************************************************
+ * Configure Memcached server.
+ */
+const char *fcgi_config_set_memcached(cmd_parms *cmd, void *dummy, const char *arg)
+{
+    const char *err = NULL;
+
+    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
+    if (err)
+    {
+        return err;
+    }
+
+	if ((err = get_host_n_port(cmd->temp_pool, &arg, &fcgi_memcached_server, &fcgi_memcached_port)))
+		return ap_psprintf(cmd->temp_pool, "the %s directive should be IP(Hostname):Port/On", cmd->cmd->name);
+
+	return NULL;
+}
+
+/*******************************************************************************
  * Enable, disable Encrypt feature.
  */
 const char *fcgi_config_set_encrypt(cmd_parms *cmd, void *dummy, const char *arg)
@@ -1080,7 +1099,7 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
 
     return NULL;
 }
-
+
 /*
  *----------------------------------------------------------------------
  *

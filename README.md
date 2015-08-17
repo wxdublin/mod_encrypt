@@ -42,16 +42,24 @@ myFCGI and host IP/Port should be changed in your case.
 You can test it using curl.  
 $ curl -v -XPUT http://localhost/myFCGI --data-binary teststring  
 
-# Directives for encyption
-## FastCgiEncrypt
+#### Directives for encyption
+##### FastCgiEncrypt
 Syntax: FastCgiEncrypt _On_ / _Off_  
 Default: FastCgiEncrypt On  
 Context: server config  
 
 Enable / Disable the feature of FastCGI encrypt.  
-## FastCgiDecrypt
+##### FastCgiDecrypt
 Syntax: FastCgiDecrypt _On_ / _Off_  
 Default: FastCgiDecrypt On  
 Context: server config  
 
 Enable / Disable the feature of FastCGI decrypt.  
+
+#### Directives for memcached
+##### FastCgiMemcachedServer
+Syntax: FastCgiMemcachedServer hostname:port  
+Default: FastCgiMemcachedServer 127.0.0.1:11211
+Context: server config  
+
+Config Memcached server IP and port number.  

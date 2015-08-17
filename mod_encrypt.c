@@ -3,71 +3,7 @@
  *
  *      Apache server module for Encrypt.
  *
- *  $Id: mod_encrypt.c,v 1.169 2008/11/09 14:31:03 robs Exp $
- *
- *  Copyright (c) 1995-1996 Open Market, Inc.
- *
- *  See the file "LICENSE.TERMS" for information on usage and redistribution
- *  of this file, and for a DISCLAIMER OF ALL WARRANTIES.
- *
- *
- *  Patches for Apache-1.1 provided by
- *  Ralf S. Engelschall
- *  <rse@en.muc.de>
- *
- *  Patches for Linux provided by
- *  Scott Langley
- *  <langles@vote-smart.org>
- *
- *  Patches for suexec handling by
- *  Brian Grossman <brian@SoftHome.net> and
- *  Rob Saccoccio <robs@ipass.net>
  */
-
-/*
- * Module design notes.
- *
- * 1. Restart cleanup.
- *
- *   mod_encrypt spawns several processes: one process manager process
- *   and several application processes.  None of these processes
- *   handle SIGHUP, so they just go away when the Web server performs
- *   a restart (as Apache does every time it starts.)
- *
- *   In order to allow the process manager to properly cleanup the
- *   running encrypt processes (without being disturbed by Apache),
- *   an intermediate process was introduced.  The diagram is as follows;
- *
- *   ApacheWS --> MiddleProc --> ProcMgr --> FCGI processes
- *
- *   On a restart, ApacheWS sends a SIGKILL to MiddleProc and then
- *   collects it via waitpid().  The ProcMgr periodically checks for
- *   its parent (via getppid()) and if it does not have one, as in
- *   case when MiddleProc has terminated, ProcMgr issues a SIGTERM
- *   to all FCGI processes, waitpid()s on them and then exits, so it
- *   can be collected by init(1).  Doing it any other way (short of
- *   changing Apache API), results either in inconsistent results or
- *   in generation of zombie processes.
- *
- *   XXX: How does Apache 1.2 implement "gentle" restart
- *   that does not disrupt current connections?  How does
- *   gentle restart interact with restart cleanup?
- *
- * 2. Request timeouts.
- *
- *   Earlier versions of this module used ap_soft_timeout() rather than
- *   ap_hard_timeout() and ate Encrypt server output until it completed.
- *   This precluded the Encrypt server from having to implement a
- *   SIGPIPE handler, but meant hanging the application longer than
- *   necessary.  SIGPIPE handler now must be installed in ALL Encrypt
- *   applications.  The handler should abort further processing and go
- *   back into the accept() loop.
- *
- *   Although using ap_soft_timeout() is better than ap_hard_timeout()
- *   we have to be more careful about SIGINT handling and subsequent
- *   processing, so, for now, make it hard.
- */
-
 
 #include "fcgi.h"
 
@@ -87,6 +23,7 @@
 
 #include "crypt.h"
 #include "json.h"
+#include "memcache.h"
 
 #ifndef timersub
 #define	timersub(a, b, result)                              \
@@ -124,6 +61,9 @@ char *fcgi_dynamic_dir = NULL;				/* directory for the dynamic
 
 BOOL fcgi_encrypt = TRUE;					/* encrypt flag */
 BOOL fcgi_decrypt = TRUE;					/* decrypt flag */
+
+char *fcgi_memcached_server = "127.0.0.1";			/* hostname or IP for memcached server */
+unsigned short fcgi_memcached_port = 11211;				/* port number for memcached server */
 
 #ifdef WIN32
 
@@ -2428,12 +2368,16 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
     int rv;
     pool *rp = r->pool;
 
+	// Initialize encrypt module
 	fr->enc = InitCrypt(gKeyData, gKeyLen);
 	fr->encCount = 0;
 	fr->encOffset = 0;
 	fr->dec = InitCrypt(gKeyData, gKeyLen);
 	fr->decCount = 0;
 	fr->decOffset = 0;
+
+	// Initialize memcached
+	memcache_init(fcgi_memcached_server, fcgi_memcached_port);
 
     fcgi_protocol_queue_begin_request(fr);
 
@@ -2443,7 +2387,7 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
         if (rv != OK) 
         {
             ap_kill_timeout(r);
-            return rv;
+            goto DO_WORK_EXIT;
         }
 
         fr->expectingClientContent = ap_should_client_block(r);
@@ -2542,6 +2486,12 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
         rv = HTTP_INTERNAL_SERVER_ERROR;
     }
 
+	ap_kill_timeout(r);
+
+DO_WORK_EXIT:
+
+	memcache_destroy();
+
 	CloseCrypt(fr->enc);
 	CloseCrypt(fr->dec);
 	fr->encCount = 0;
@@ -2549,7 +2499,6 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
 	fr->decCount = 0;
 	fr->decOffset = 0;
    
-    ap_kill_timeout(r);
     return rv;
 }
 
@@ -3056,6 +3005,8 @@ static const command_rec encrypt_cmds[] =
 
     AP_INIT_RAW_ARGS("ExternalAppClass",      fcgi_config_new_external_server, NULL, RSRC_CONF, NULL),
     AP_INIT_RAW_ARGS("FastCgiExternalServer", fcgi_config_new_external_server, NULL, RSRC_CONF, NULL),
+
+	AP_INIT_TAKE1("FastCgiMemcachedServer",  fcgi_config_set_memcached, NULL, RSRC_CONF, NULL),
 
     AP_INIT_TAKE1("FastCgiIpcDir", fcgi_config_set_socket_dir, NULL, RSRC_CONF, NULL),
 

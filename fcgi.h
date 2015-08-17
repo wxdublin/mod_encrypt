@@ -249,7 +249,7 @@ typedef struct _EncryptServerInfo {
                                      * managed Encrypt applications or for
                                      * server managed Encrypt applications,
                                      * where server became application mngr. */
-    int listenFd;                   /* Listener socket of FCGI app server
+	int listenFd;                   /* Listener socket of FCGI app server
                                      * class.  Passed to app server process
                                      * at process creation. */
     u_int processPriority;          /* If locally server managed process,
@@ -515,6 +515,7 @@ const char *fcgi_config_set_authoritative_slot(cmd_parms * cmd,
     void * dir_config, int arg);
 const char *fcgi_config_set_socket_dir(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_wrapper(cmd_parms *cmd, void *dummy, const char *arg);
+const char *fcgi_config_set_memcached(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_encrypt(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_decrypt(cmd_parms *cmd, void *dummy, const char *arg);
 apcb_t fcgi_config_reset_globals(void * dummy);
@@ -625,6 +626,9 @@ typedef int BOOL;
 
 extern BOOL fcgi_encrypt;					/* encrypt flag */
 extern BOOL fcgi_decrypt;					/* decrypt flag */
+
+extern char *fcgi_memcached_server;
+extern unsigned short fcgi_memcached_port;
 
 extern char *fcgi_socket_dir;             /* default EncryptIpcDir */
 

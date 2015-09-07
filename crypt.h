@@ -7,7 +7,8 @@
 
 #define CRYPT_BLOCK_SIZE	512
 
-void *InitCrypt(unsigned char *keydata, int keydata_len);
+void *InitEncrypt(request_rec * r, fcgi_request * fr);
+void *InitDecrypt(request_rec * r, fcgi_request * fr);
 void CloseCrypt(void *ctx);
 void CryptDataStream(void *ctx, char *data, int offset, int len);
 

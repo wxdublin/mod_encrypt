@@ -357,7 +357,7 @@
 				Name="VCCLCompilerTool"
 				AdditionalOptions="/EHsc "
 				Optimization="0"
-				AdditionalIncludeDirectories="F:\FastCGI\Apache24\include;..\src;.\jansson;.\libcurl\include;.\openssl\include;.\;"
+				AdditionalIncludeDirectories="F:\FastCGI\Apache24\include;..\src;.\jansson;.\libcurl\include;.\openssl\include;.\;.\libcurl\include;"
 				PreprocessorDefinitions="_DEBUG;WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;CURL_STATICLIB;HAVE_STDINT_H"
 				RuntimeLibrary="3"
 				PrecompiledHeaderFile=""
@@ -383,13 +383,13 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="ws2_32.lib winmm.lib apr-1.lib libapr-1.lib aprutil-1.lib libapriconv-1.lib libaprutil-1.lib libhttpd.lib libeay32.lib ssleay32.lib"
+				AdditionalDependencies="ws2_32.lib winmm.lib apr-1.lib libapr-1.lib aprutil-1.lib libapriconv-1.lib libaprutil-1.lib libhttpd.lib libeay32.lib ssleay32.lib libcurl_a.lib"
 				OutputFile="$(OutDir)\$(ProjectName).so"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
-				AdditionalLibraryDirectories="F:\FastCGI\Apache24\lib;.\openssl\lib;..\crypt\aesni"
+				AdditionalLibraryDirectories="F:\FastCGI\Apache24\lib;.\openssl\lib;.\libcurl\lib"
 				IgnoreAllDefaultLibraries="false"
-				IgnoreDefaultLibraryNames="LIBCMT"
+				IgnoreDefaultLibraryNames="LIBCMT;MSVCRT"
 				GenerateDebugInformation="true"
 				ProgramDatabaseFile=".\Debug\mod_encrypt.pdb"
 				SubSystem="2"
@@ -433,11 +433,27 @@
 			Name="Source Files"
 			>
 			<File
-				RelativePath="..\aes256.c"
+				RelativePath="..\aes256cbc.c"
 				>
 			</File>
 			<File
-				RelativePath="..\aes256.h"
+				RelativePath="..\aes256cbc.h"
+				>
+			</File>
+			<File
+				RelativePath="..\aes256ctr.c"
+				>
+			</File>
+			<File
+				RelativePath="..\aes256ctr.h"
+				>
+			</File>
+			<File
+				RelativePath="..\base64.c"
+				>
+			</File>
+			<File
+				RelativePath="..\base64.h"
 				>
 			</File>
 			<File
@@ -485,11 +501,35 @@
 				>
 			</File>
 			<File
+				RelativePath="..\key.c"
+				>
+			</File>
+			<File
+				RelativePath="..\key.h"
+				>
+			</File>
+			<File
+				RelativePath="..\memcache.c"
+				>
+			</File>
+			<File
+				RelativePath="..\memcache.h"
+				>
+			</File>
+			<File
 				RelativePath="..\mod_encrypt.c"
 				>
 			</File>
 			<File
 				RelativePath="..\mod_encrypt.h"
+				>
+			</File>
+			<File
+				RelativePath="..\utctime.c"
+				>
+			</File>
+			<File
+				RelativePath="..\utctime.h"
 				>
 			</File>
 			<Filter

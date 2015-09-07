@@ -21,42 +21,34 @@ void *json_load(const char *text)
     }
 }
 
-int json_get_string(void *jobject, char *key, char *value)
+char *json_get_string(void *jobject, char *key)
 {
 	const json_t *jroot;
 	const char *ret;
 
-	if (!jobject || !key || !value)
-		return -1;
+	if (!jobject || !key)
+		return NULL;
 
 	jroot = (const json_t *)jobject;
 
 	ret = json_string_value(json_object_get(jroot, key));
-	if (!ret)
-		return -1;
-
-	strcpy(value, ret);
-
-	return 0;
+	
+	return (char *)ret;
 }
 
-int json_get_integer(void *jobject, char *key, int *value)
+int json_get_integer(void *jobject, char *key)
 {
 	const json_t *jroot;
 	json_int_t ret;
 
-	if (!jobject || !key || !value)
+	if (!jobject || !key)
 		return -1;
 
 	jroot = (const json_t *)jobject;
 
 	ret = json_integer_value(json_object_get(jroot, key));
-	if (!ret)
-		return -1;
 
-	*value = (int)ret;
-
-	return 0;
+	return (int)ret;
 }
 
 void json_unload(void *jobject)

@@ -15,18 +15,58 @@
 #include <openssl/bn.h>
 
 #include "fcgi.h"
-#include "aes256.h"
+#include "aes256ctr.h"
+#include "aes256cbc.h"
 #include "crypt.h"
+#include "key.h"
 
 //////////////////////////////////////////////////////////////////////////
 
-void *InitCrypt(unsigned char *keydata, int keydata_len)
+void *InitEncrypt(request_rec * r, fcgi_request * fr)
 {
-	return (void *)InitAesCtr(keydata, keydata_len);
+	if (fr->encryptor.dataKeyLength == 0)
+	{
+		// key authorization
+		if (key_auth_request(r, &fr->encryptor, fr->fs->master_key_server) < 0)
+			return NULL;
+
+		// get master key
+		if (key_master_request(r, &fr->encryptor, fr->fs->master_key_server) < 0)
+			return NULL;
+
+		// get data key
+		if (key_data_request(r, &fr->encryptor, fr->fs->data_key_server) < 0)
+			return NULL;
+	}
+	
+	return (void *)InitAesCtr(fr->encryptor.dataKey, fr->encryptor.dataKeyLength);
+}
+
+void *InitDecrypt(request_rec * r, fcgi_request * fr)
+{
+	if (fr->decryptor.dataKeyLength == 0)
+	{
+		// key authorization
+		if (key_auth_request(r, &fr->decryptor, fr->fs->master_key_server) < 0)
+			return NULL;
+
+		// get master key
+		if (key_master_request(r, &fr->decryptor, fr->fs->master_key_server) < 0)
+			return NULL;
+
+		// get data key
+		if (key_data_request(r, &fr->decryptor, fr->fs->data_key_server) < 0)
+			return NULL;
+	}
+
+	return (void *)InitAesCtr(fr->decryptor.dataKey, fr->decryptor.dataKeyLength);
 }
 
 void CloseCrypt(void *ctx)
 {
+	if (!ctx)
+		return;
+	
 	UninitAesCtr((EVP_CIPHER_CTX *)ctx);
 }
 
@@ -42,7 +82,7 @@ void CryptDataStream(void *ctx, char *data, int offset, int len)
 	char *buff;
 
 	// check parameters
-	if (!data || ((offset+len) <= 0))
+	if (!ctx || !data || ((offset+len) <= 0))
 		return;
 
 	buff = malloc(BUFF_SIZE);

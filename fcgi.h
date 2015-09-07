@@ -274,6 +274,8 @@ typedef struct _EncryptServerInfo {
     u_long totalQueueTime;          /* microseconds spent by the web server
                                      * waiting to connect to the encrypt app
                                      * since the last dynamicUpdateInterval. */
+	const char *master_key_server;	/* IP address (or URL ) of Master Key Server */
+	const char *data_key_server;	/* IP address (or URL ) of Data Key Server */
     int nph;
     struct _EncryptServerInfo *next;
 } fcgi_server;
@@ -282,6 +284,20 @@ typedef struct _EncryptServerInfo {
 /*
  * fcgi_request holds the state of a particular Encrypt request.
  */
+typedef struct {
+	void *crypt;
+	int count;
+	int offset;
+
+	char token[256];
+	char masterKeyId[256];
+	char masterKey[64];
+	char initializationVector[64];
+	char dataKeyId[256];
+	char dataKey[256];
+	int dataKeyLength;
+} fcgi_crypt;
+
 typedef struct {
 #ifdef WIN32
     SOCKET fd;
@@ -327,12 +343,9 @@ typedef struct {
 #endif
     int nph;
 
-	void *enc;
-	int encCount;
-	int encOffset;
-	void *dec;
-	int decCount;
-	int decOffset;
+	fcgi_crypt encryptor;
+	fcgi_crypt decryptor;
+
 } fcgi_request;
 
 /* Values of parseHeader field */
@@ -518,6 +531,8 @@ const char *fcgi_config_set_wrapper(cmd_parms *cmd, void *dummy, const char *arg
 const char *fcgi_config_set_memcached(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_encrypt(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_decrypt(cmd_parms *cmd, void *dummy, const char *arg);
+const char *fcgi_config_set_username(cmd_parms *cmd, void *dummy, const char *arg);
+const char *fcgi_config_set_password(cmd_parms *cmd, void *dummy, const char *arg);
 apcb_t fcgi_config_reset_globals(void * dummy);
 const char *fcgi_config_set_env_var(pool *p, char **envp, unsigned int *envc, char * var);
 
@@ -626,6 +641,9 @@ typedef int BOOL;
 
 extern BOOL fcgi_encrypt;					/* encrypt flag */
 extern BOOL fcgi_decrypt;					/* decrypt flag */
+
+extern char *fcgi_username;					/* default FastCGI User Name */
+extern char *fcgi_password;					/* default FastCGI Password */
 
 extern char *fcgi_memcached_server;
 extern unsigned short fcgi_memcached_port;

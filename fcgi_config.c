@@ -12,7 +12,7 @@
 
 #ifdef WIN32
 #include <direct.h>
-#else
+#else 
 #include <unistd.h>
 #include "unixd.h"
 #endif
@@ -56,7 +56,7 @@ static const char *get_host_n_port(pool *p, const char **arg,
 
     return NULL;
 }
-
+
 /*******************************************************************************
  * Get the next configuration directive argument, & return an u_short.
  * The pool arg should be temporary storage.
@@ -291,6 +291,9 @@ apcb_t fcgi_config_reset_globals(void* dummy)
     dynamic_pass_headers = NULL;
     dynamic_idle_timeout = FCGI_DEFAULT_IDLE_TIMEOUT;
 	dynamicFlush = FCGI_FLUSH;
+
+	fcgi_encrypt = TRUE;
+	fcgi_decrypt = TRUE;
 
 #ifndef WIN32
 	/* Close any old pipe (HUP/USR1) */
@@ -599,8 +602,8 @@ const char *fcgi_config_set_memcached(cmd_parms *cmd, void *dummy, const char *a
         return err;
     }
 
-	if ((err = get_host_n_port(cmd->temp_pool, &arg, &fcgi_memcached_server, &fcgi_memcached_port)))
-		return ap_psprintf(cmd->temp_pool, "the %s directive should be IP(Hostname):Port/On", cmd->cmd->name);
+	if ((err = get_host_n_port(cmd->pool, &arg, (const char **)&fcgi_memcached_server, &fcgi_memcached_port)))
+		return ap_psprintf(cmd->pool, "the %s directive should be IP(Hostname):Port/On", cmd->cmd->name);
 
 	return NULL;
 }
@@ -655,6 +658,42 @@ const char *fcgi_config_set_decrypt(cmd_parms *cmd, void *dummy, const char *arg
 		return ap_psprintf(cmd->temp_pool, 
 			"the %s directive should be only Off/On", cmd->cmd->name);
 	}
+
+	return NULL;
+}
+
+/*******************************************************************************
+ * Set Sproxyd User Name.
+ */
+const char *fcgi_config_set_username(cmd_parms *cmd, void *dummy, const char *arg)
+{
+    const char *err = NULL;
+
+    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
+    if (err)
+    {
+        return err;
+    }
+
+	fcgi_username = ap_getword_conf(cmd->pool, &arg);
+
+	return NULL;
+}
+
+/*******************************************************************************
+ * Set Sproxyd User Password.
+ */
+const char *fcgi_config_set_password(cmd_parms *cmd, void *dummy, const char *arg)
+{
+    const char *err = NULL;
+
+    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
+    if (err)
+    {
+        return err;
+    }
+
+	fcgi_password = ap_getword_conf(cmd->pool, &arg);
 
 	return NULL;
 }
@@ -1022,6 +1061,16 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
                 return invalid_value(tp, name, fs_path, option, "\"\"");
 #endif
         }
+		else if (strcasecmp(option, "-masterkeyserver") == 0) {
+			s->master_key_server = ap_getword_conf(p, &arg);
+			if (*s->master_key_server == '\0')
+				return invalid_value(tp, name, fs_path, option, "\"\"");
+		}
+		else if (strcasecmp(option, "-datakeyserver") == 0) {
+			s->data_key_server = ap_getword_conf(p, &arg);
+			if (*s->data_key_server == '\0')
+				return invalid_value(tp, name, fs_path, option, "\"\"");
+		}
         else {
             return ap_psprintf(tp, "%s %s: invalid option: %s", name, fs_path, option);
         }
@@ -1278,7 +1327,7 @@ const char *fcgi_config_new_auth_server(cmd_parms * cmd,
     if (compat && strcasecmp(compat, "-compat"))
         return ap_psprintf(cmd->temp_pool, "%s: unknown option: \"%s\"", cmd->cmd->name, compat);
 
-    switch((int)cmd->info) {
+    switch((int)(long)cmd->info) {
         case FCGI_AUTH_TYPE_AUTHENTICATOR:
             dir_config->authenticator = auth_server;
             dir_config->authenticator_options |= (compat) ? FCGI_COMPAT : 0;

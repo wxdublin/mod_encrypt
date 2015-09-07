@@ -23,7 +23,7 @@ int utf8_encode(int32_t codepoint, char *buffer, size_t *size)
         buffer[1] = 0x80 + ((codepoint & 0x03F));
         *size = 2;
     }
-    else if(codepoint < 0x10000)
+    else if(codepoint < 0x10000) 
     {
         buffer[0] = 0xE0 + ((codepoint & 0xF000) >> 12);
         buffer[1] = 0x80 + ((codepoint & 0x0FC0) >> 6);

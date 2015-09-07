@@ -51,6 +51,7 @@ MEMCACHE_INIT_EXIT:
 		apr_pool_destroy(MemcachePool);
 		MemcachePool = NULL;
 	}
+	Memcache = NULL;
 
 	return -1;
 }
@@ -58,6 +59,8 @@ MEMCACHE_INIT_EXIT:
 int memcache_set(const char *key, const char *value)
 {
 	apr_status_t rv;
+	if (!Memcache || !key || !value)
+		return -1;
 	rv = apr_memcache_set(Memcache, key, (char *)value, strlen(value), UNTIL, 0);
 
 	return rv;
@@ -66,6 +69,8 @@ int memcache_set(const char *key, const char *value)
 int memcache_set_timeout(const char *key, const char *value, unsigned int timeout)
 {
 	apr_status_t rv;
+	if (!Memcache || !key || !value)
+		return -1;
 	rv = apr_memcache_set(Memcache, key, (char *)value, strlen(value), (apr_uint32_t)timeout, 0);
 
 	return rv;
@@ -76,6 +81,9 @@ char* memcache_get(const char *key)
 	apr_status_t rv;
 	apr_size_t len;
 	char *result;
+
+	if (!Memcache || !key)
+		return NULL;
 
 	rv = apr_memcache_getp(Memcache, MemcachePool, key, &result, &len, NULL);
 
@@ -92,6 +100,8 @@ char* memcache_get(const char *key)
 int memcache_delete(const char *key)
 {
 	apr_status_t rv;
+	if (!Memcache || !key)
+		return -1;
 	rv = apr_memcache_delete(Memcache, key, 100);
 
 	return rv;

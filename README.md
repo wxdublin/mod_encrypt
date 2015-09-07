@@ -33,9 +33,12 @@ This is the simple example how to use mod_encyrpt :
       LoadModule encrypt_module modules/mod_encrypt.so
       <IfModule encrypt_module>
           AddHandler encrypt-script .fcgi
-          FastCgiExternalServer /var/www/html/myFCGI -host 192.168.0.1:3000
+          FastCgiExternalServer /var/www/html/myFCGI -host 192.168.0.1:3000 -masterkeyserver www.masterkeyserver.com -datakeyserver www.datakeyserver.com
           FastCgiEncrypt On
           FastCgiDecrypt On
+	  FastCgiMemcachedServer 127.0.0.1:11211
+	  FastCgiUserName test_user
+	  FastCgiPassword test_password
       </IfModule>
 
 myFCGI and host IP/Port should be changed in your case.  
@@ -63,3 +66,11 @@ Default: FastCgiMemcachedServer 127.0.0.1:11211
 Context: server config  
 
 Config Memcached server IP and port number.  
+
+#### Directives for user authentication
+##### FastCgiUserName, FastCgiPassword
+Syntax: FastCgiUserName username, FastCgiPassword password
+Default: FastCgiUserName NONE, FastCgiPassword NONE
+Context: server config  
+
+Config user name and password for user authentication of key store

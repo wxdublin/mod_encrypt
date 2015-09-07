@@ -16,7 +16,7 @@
     $ cd <mod_encrypt_dir>
     $ cp Makefile.AP2 Makefile
     $ make 
-    $ make install
+    $ sudo make install
 
     If your Apache2 installation isn't in /usr/local/apache2, then
     set the top_dir variable when running make (or edit the

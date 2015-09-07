@@ -24,6 +24,7 @@
 #include "crypt.h"
 #include "json.h"
 #include "memcache.h"
+#include "key.h"
 
 #ifndef timersub
 #define	timersub(a, b, result)                              \
@@ -61,6 +62,9 @@ char *fcgi_dynamic_dir = NULL;				/* directory for the dynamic
 
 BOOL fcgi_encrypt = TRUE;					/* encrypt flag */
 BOOL fcgi_decrypt = TRUE;					/* decrypt flag */
+
+char *fcgi_username = NULL;					/* default FastCGI User Name */
+char *fcgi_password = NULL;					/* default FastCGI Password */
 
 char *fcgi_memcached_server = "127.0.0.1";			/* hostname or IP for memcached server */
 unsigned short fcgi_memcached_port = 11211;				/* port number for memcached server */
@@ -593,19 +597,6 @@ static void close_connection_to_fs(fcgi_request *fr)
  *----------------------------------------------------------------------
  */
 
-static unsigned char gKeyData[] = \
-"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
-"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
-"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
-"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
-"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
-"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
-"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
-"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
-"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
-"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr";
-static int gKeyLen = 512;
-
 static const char *process_headers(request_rec *r, fcgi_request *fr)
 {
     char *p, *next, *name, *value;
@@ -719,35 +710,9 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 
 			if (strcasecmp(name, "Content-Range") == 0) {
 				sscanf(value, "bytes %d-%d/%d", &startRange, &endRange, &sizeRange);
-				fr->decOffset = startRange;
+				fr->decryptor.offset = startRange;
 			}
 
-			if (fcgi_decrypt == TRUE)
-			{
-				if (strcasecmp(name, "X-Scal-Usermd") == 0) {
-					int i, len;
-
-					len = strlen(value);
-
-					CloseCrypt(fr->dec);
-					fr->dec = InitCrypt(gKeyData, gKeyLen);
-
-					CryptDataStream(fr->dec, value, 0, len);
-					for (i=0; i<len; i++) 
-					{
-						unsigned char ch = value[i];
-						if (ch > (unsigned char)0x8F)
-						{
-							ch -= (unsigned char)0x70;
-							value[i] = ch;
-						}
-					}
-
-					CloseCrypt(fr->dec);
-					fr->dec = InitCrypt(gKeyData, gKeyLen);
-				}
-			}
-			
  			/* If the script wants them merged, it can do it */
             ap_table_add(r->err_headers_out, name, value);
             continue;
@@ -759,6 +724,71 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 
     if (fr->role != FCGI_RESPONDER)
         return NULL;
+
+	/* decrypt parameters */
+	
+	{
+		char bracket[2];
+		char masterkeyid[256], datakeyid[256], masterkey[256], iv[256];
+		char *bulk_encrypt = (char *)ap_table_get(r->err_headers_out, "Bulk_encrypt");
+		char *obj_encrypt = (char *)ap_table_get(r->err_headers_out, "Obj_encrypt");
+		char *usermd = (char *)ap_table_get(r->err_headers_out, "X-Scal-Usermd");
+
+		// get masterkeyid, datakeyid, iv
+		memset(masterkeyid, 0, 256);
+		memset(datakeyid, 0, 256);
+		memset(masterkey, 0, 256);
+		memset(iv, 0, 256);
+		if (bulk_encrypt && obj_encrypt)
+		{
+			fcgi_crypt *fc;
+			sscanf(bulk_encrypt, "%c %s %s %c", &bracket[0], masterkeyid, datakeyid, &bracket[1]);
+			sscanf(obj_encrypt, "%c %s %s %c", &bracket[0], masterkey, iv, &bracket[1]);
+
+			fc = &fr->decryptor;
+
+			memcpy(fc->masterKeyId, masterkeyid, strlen(masterkeyid));
+			fc->masterKeyId[strlen(masterkeyid)] = 0;
+
+			memcpy(fc->dataKeyId, datakeyid, strlen(datakeyid));
+			fc->dataKeyId[strlen(datakeyid)] = 0;
+
+			memcpy(fc->masterKey, masterkey, strlen(masterkey));
+			fc->masterKey[strlen(masterkey)] = 0;
+
+			memcpy(fc->initializationVector, iv, strlen(iv));
+			fc->initializationVector[strlen(iv)] = 0;
+
+			ap_table_unset(r->err_headers_out, "Bulk_encrypt");
+			ap_table_unset(r->err_headers_out, "Obj_encrypt");
+
+			CloseCrypt(fr->decryptor.crypt);
+			fr->decryptor.crypt = InitDecrypt(r, fr);
+		}
+		
+		if ((usermd) && (fcgi_decrypt == TRUE))
+		{
+			int i;
+			len = strlen(usermd);
+
+			CloseCrypt(fr->decryptor.crypt);
+			fr->decryptor.crypt = InitDecrypt(r, fr);
+
+			CryptDataStream(fr->decryptor.crypt, usermd, 0, len);
+			for (i=0; i<len; i++) 
+			{
+				unsigned char ch = usermd[i];
+				if (ch > (unsigned char)0x8F)
+				{
+					ch -= (unsigned char)0x70;
+					usermd[i] = ch;
+				}
+			}
+
+			CloseCrypt(fr->decryptor.crypt);
+			fr->decryptor.crypt = InitDecrypt(r, fr);
+		}
+	}
 
     /*
      * Who responds, this handler or Apache?
@@ -876,7 +906,7 @@ static int read_from_client_n_queue(fcgi_request *fr)
         else {
 			if (fcgi_encrypt == TRUE)
 			{
-				CryptDataStream(fr->enc, end, 0, countRead);
+				CryptDataStream(fr->encryptor.crypt, end, 0, countRead);
 			}
 			
             fcgi_buf_add_update(fr->clientInputBuffer, countRead);
@@ -900,18 +930,18 @@ static int write_to_client(fcgi_request *fr)
 	fcgi_buf_get_block_info(fr->clientOutputBuffer, &begin, &count);
 	if (fcgi_decrypt == TRUE)
 	{
-		if ((fr->decOffset > 0) &&
-			(fr->decOffset >= fr->decCount))
+		if ((fr->decryptor.offset > 0) &&
+			(fr->decryptor.offset >= fr->decryptor.count))
 		{
-			int offset = fr->decOffset - fr->decCount;
-			CryptDataStream(fr->dec, fr->clientOutputBuffer->data, offset, count);
-			fr->decOffset = 0;
+			int offset = fr->decryptor.offset - fr->decryptor.count;
+			CryptDataStream(fr->decryptor.crypt, fr->clientOutputBuffer->data, offset, count);
+			fr->decryptor.offset = 0;
 		}
 		else
 		{
-			CryptDataStream(fr->dec, fr->clientOutputBuffer->data, 0, count);
+			CryptDataStream(fr->decryptor.crypt, fr->clientOutputBuffer->data, 0, count);
 		}
-		fr->decCount += count;
+		fr->decryptor.count += count;
 	}
     if (count == 0)
         return OK;
@@ -2368,18 +2398,7 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
     int rv;
     pool *rp = r->pool;
 
-	// Initialize encrypt module
-	fr->enc = InitCrypt(gKeyData, gKeyLen);
-	fr->encCount = 0;
-	fr->encOffset = 0;
-	fr->dec = InitCrypt(gKeyData, gKeyLen);
-	fr->decCount = 0;
-	fr->decOffset = 0;
-
-	// Initialize memcached
-	memcache_init(fcgi_memcached_server, fcgi_memcached_port);
-
-    fcgi_protocol_queue_begin_request(fr);
+	fcgi_protocol_queue_begin_request(fr);
 
     if (fr->role == FCGI_RESPONDER) 
     {
@@ -2387,7 +2406,7 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
         if (rv != OK) 
         {
             ap_kill_timeout(r);
-            goto DO_WORK_EXIT;
+            return rv;
         }
 
         fr->expectingClientContent = ap_should_client_block(r);
@@ -2488,17 +2507,6 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
 
 	ap_kill_timeout(r);
 
-DO_WORK_EXIT:
-
-	memcache_destroy();
-
-	CloseCrypt(fr->enc);
-	CloseCrypt(fr->dec);
-	fr->encCount = 0;
-	fr->encOffset = 0;
-	fr->decCount = 0;
-	fr->decOffset = 0;
-   
     return rv;
 }
 
@@ -2612,6 +2620,10 @@ create_fcgi_request(request_rec * const r,
 #endif    
 	}
 
+	// encryption variables
+	memset(&fr->encryptor, 0, sizeof(fcgi_crypt));
+	memset(&fr->decryptor, 0, sizeof(fcgi_crypt));
+
     set_uid_n_gid(r, &fr->user, &fr->group);
 
     *frP = fr;
@@ -2694,41 +2706,47 @@ static int post_process_for_redirects(request_rec * const r,
  */
 static int content_handler(request_rec *r)
 {
-    fcgi_request *fr = NULL;
-    int ret;
-    void *jsonhandler;
-
-    jsonhandler = json_load("{\"key\":\"value\"}");
-    json_unload(jsonhandler);
+	fcgi_request *fr = NULL;
+	int ret;
 
 #ifdef APACHE2
-    if (strcmp(r->handler, ENCRYPT_HANDLER_NAME))
-        return DECLINED;
+	if (strcmp(r->handler, ENCRYPT_HANDLER_NAME))
+		return DECLINED;
 #endif
-    /* Setup a new Encrypt request */
-    ret = create_fcgi_request(r, NULL, &fr);
-    if (ret)
-    {
-        return ret;
-    }
+	/* Setup a new Encrypt request */
+	ret = create_fcgi_request(r, NULL, &fr);
+	if (ret)
+	{
+        	return ret;
+	}
 
-    /* If its a dynamic invocation, make sure scripts are OK here */
-    if (fr->dynamic && ! (ap_allow_options(r) & OPT_EXECCGI) 
-        && ! apache_is_scriptaliased(r)) 
-    {
-        ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r,
-            "Encrypt: \"ExecCGI Option\" is off in this directory: %s", r->uri);
-        return HTTP_FORBIDDEN;
-    }
+	/* If its a dynamic invocation, make sure scripts are OK here */
+	if (fr->dynamic && ! (ap_allow_options(r) & OPT_EXECCGI) && ! apache_is_scriptaliased(r)) 
+	{
+		ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r, "Encrypt: \"ExecCGI Option\" is off in this directory: %s", r->uri);
+		return HTTP_FORBIDDEN;
+	}
 
-    /* Process the encrypt-script request */
-    if ((ret = do_work(r, fr)) != OK)
-        return ret;
+	// Initialize memcache
+	memcache_init(fcgi_memcached_server, fcgi_memcached_port);
 
-    /* Special case redirects */
-    ret = post_process_for_redirects(r, fr);
+	// if PUT, initialize encrypt
+	if (!strcasecmp(r->method, "PUT"))
+		fr->encryptor.crypt = InitEncrypt(r, fr);
 
-    return ret;
+	/* Process the encrypt-script request */
+	if ((ret = do_work(r, fr)) != OK)
+		goto HANDLER_EXIT;
+
+	/* Special case redirects */
+	ret = post_process_for_redirects(r, fr);
+
+HANDLER_EXIT:
+	CloseCrypt(fr->encryptor.crypt);
+	CloseCrypt(fr->decryptor.crypt);
+	memcache_destroy();
+
+	return ret;
 }
 
 static int post_process_auth_passed_header(table *t, const char *key, const char * const val)
@@ -3015,6 +3033,9 @@ static const command_rec encrypt_cmds[] =
 
 	AP_INIT_TAKE1("FastCgiEncrypt",  fcgi_config_set_encrypt, NULL, RSRC_CONF, NULL),
 	AP_INIT_TAKE1("FastCgiDecrypt",  fcgi_config_set_decrypt, NULL, RSRC_CONF, NULL),
+
+	AP_INIT_TAKE1("FastCgiUserName",  fcgi_config_set_username, NULL, RSRC_CONF, NULL),
+	AP_INIT_TAKE1("FastCgiPassword",  fcgi_config_set_password, NULL, RSRC_CONF, NULL),
 
     AP_INIT_RAW_ARGS("FCGIConfig",    fcgi_config_set_config, NULL, RSRC_CONF, NULL),
     AP_INIT_RAW_ARGS("FastCgiConfig", fcgi_config_set_config, NULL, RSRC_CONF, NULL),

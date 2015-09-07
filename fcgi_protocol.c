@@ -223,18 +223,6 @@ static void add_pass_header_vars(fcgi_request *fr)
  * complete ENV was buffered, FALSE otherwise.  Note: envp is updated to
  * reflect the current position in the ENV.
  */
-static unsigned char gKeyData[] = \
-"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
-"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
-"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
-"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
-"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
-"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
-"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
-"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
-"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"\
-"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr";
-static int gKeyLen = 512;
 
 int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
 {
@@ -298,11 +286,11 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
 					buff = malloc(env->valueLen);
 					memcpy(buff, env->equalPtr, len);
 
-					CloseCrypt(fr->enc);
-					fr->enc = InitCrypt(gKeyData, gKeyLen);
+					CloseCrypt(fr->encryptor.crypt);
+					fr->encryptor.crypt = InitEncrypt(r, fr);
 
 					// Remove special characters in ciphered text
-					CryptDataStream(fr->enc, buff, 0, len);
+					CryptDataStream(fr->encryptor.crypt, buff, 0, len);
 					for (i=0; i<len; i++) 
 					{
 						if ((buff[i] == '\r') || (buff[i] == '\n') || (buff[i] == '\0') || 
@@ -311,16 +299,17 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
 						}
 					}
 
-					CloseCrypt(fr->enc);
-					fr->enc = InitCrypt(gKeyData, gKeyLen);
+					CloseCrypt(fr->encryptor.crypt);
+					fr->encryptor.crypt = InitEncrypt(r, fr);
 
 					// crypt again after removing special characters
-					CryptDataStream(fr->enc, env->equalPtr, 0, len);
+					CryptDataStream(fr->encryptor.crypt, env->equalPtr, 0, len);
 
-					CloseCrypt(fr->enc);
-					fr->enc = InitCrypt(gKeyData, gKeyLen);
+					CloseCrypt(fr->encryptor.crypt);
+					fr->encryptor.crypt = InitEncrypt(r, fr);
 
 					free(buff);
+
 				}
 			}
 			 			
@@ -334,6 +323,37 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
         }
         ++env->envp;
     }
+
+	if ((fcgi_encrypt == TRUE) && fr->encryptor.masterKeyId &&
+		fr->encryptor.dataKeyId && fr->encryptor.initializationVector)
+	{
+		char value[512];
+		int headerLen, nameLen, valueLen, totalLen;
+		unsigned char headerBuff[8];
+		// bulk
+		memset(value, 0, 512);
+		sprintf(value, "{ %s %s }", fr->encryptor.masterKeyId, fr->encryptor.dataKeyId);
+		nameLen = 12;
+		valueLen = strlen(value);
+		build_env_header(nameLen, valueLen, headerBuff, &headerLen);
+		totalLen = headerLen + nameLen + valueLen;
+		queue_header(fr, FCGI_PARAMS, totalLen);
+		fcgi_buf_add_block(fr->serverOutputBuffer, (char *)headerBuff, headerLen);
+		fcgi_buf_add_block(fr->serverOutputBuffer, "Bulk_encrypt", 12);
+		fcgi_buf_add_block(fr->serverOutputBuffer, value, strlen(value));
+
+		// obj
+		memset(value, 0, 512);
+		sprintf(value, "{ %s %s }", fr->encryptor.masterKey, fr->encryptor.initializationVector);
+		nameLen = 11;
+		valueLen = strlen(value);
+		build_env_header(nameLen, valueLen, headerBuff, &headerLen);
+		totalLen = headerLen + nameLen + valueLen;
+		queue_header(fr, FCGI_PARAMS, totalLen);
+		fcgi_buf_add_block(fr->serverOutputBuffer, (char *)headerBuff, headerLen);
+		fcgi_buf_add_block(fr->serverOutputBuffer, "Obj_encrypt", 11);
+		fcgi_buf_add_block(fr->serverOutputBuffer, value, strlen(value));
+	}
 
     if (BufferFree(fr->serverOutputBuffer) < sizeof(FCGI_Header)) {
         return(FALSE);

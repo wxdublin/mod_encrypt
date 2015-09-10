@@ -6,6 +6,7 @@
 #include "fcgi_protocol.h"
 
 #include "crypt.h"
+#include "log.h"
 
 #ifdef APACHE2
 #include "apr_lib.h"
@@ -327,32 +328,36 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
 	if ((fcgi_encrypt == TRUE) && fr->encryptor.masterKeyId &&
 		fr->encryptor.dataKeyId && fr->encryptor.initializationVector)
 	{
-		char value[512];
+		char bulkvalue[512];
+		char objvalue[512];
+		char logdata[1024];
 		int headerLen, nameLen, valueLen, totalLen;
 		unsigned char headerBuff[8];
 		// bulk
-		memset(value, 0, 512);
-		sprintf(value, "{ %s %s }", fr->encryptor.masterKeyId, fr->encryptor.dataKeyId);
+		memset(bulkvalue, 0, 512);
+		sprintf(bulkvalue, "{ %s %s }", fr->encryptor.masterKeyId, fr->encryptor.dataKeyId);
 		nameLen = 12;
-		valueLen = strlen(value);
+		valueLen = strlen(bulkvalue);
 		build_env_header(nameLen, valueLen, headerBuff, &headerLen);
 		totalLen = headerLen + nameLen + valueLen;
 		queue_header(fr, FCGI_PARAMS, totalLen);
 		fcgi_buf_add_block(fr->serverOutputBuffer, (char *)headerBuff, headerLen);
 		fcgi_buf_add_block(fr->serverOutputBuffer, "Bulk_encrypt", 12);
-		fcgi_buf_add_block(fr->serverOutputBuffer, value, strlen(value));
-
+		fcgi_buf_add_block(fr->serverOutputBuffer, bulkvalue, strlen(bulkvalue));
 		// obj
-		memset(value, 0, 512);
-		sprintf(value, "{ %s %s }", fr->encryptor.masterKey, fr->encryptor.initializationVector);
+		memset(objvalue, 0, 512);
+		sprintf(objvalue, "{ %s %s }", fr->encryptor.masterKey, fr->encryptor.initializationVector);
 		nameLen = 11;
-		valueLen = strlen(value);
+		valueLen = strlen(objvalue);
 		build_env_header(nameLen, valueLen, headerBuff, &headerLen);
 		totalLen = headerLen + nameLen + valueLen;
 		queue_header(fr, FCGI_PARAMS, totalLen);
 		fcgi_buf_add_block(fr->serverOutputBuffer, (char *)headerBuff, headerLen);
 		fcgi_buf_add_block(fr->serverOutputBuffer, "Obj_encrypt", 11);
-		fcgi_buf_add_block(fr->serverOutputBuffer, value, strlen(value));
+		fcgi_buf_add_block(fr->serverOutputBuffer, objvalue, strlen(objvalue));
+		// logging
+		sprintf(logdata, "added new metadata, bulk_encrypt:%s, obj_encrypt:%s", bulkvalue, objvalue);
+		log_message(ENCRYPT_LOG_TRACK, logdata);
 	}
 
     if (BufferFree(fr->serverOutputBuffer) < sizeof(FCGI_Header)) {

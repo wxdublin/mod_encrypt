@@ -62,15 +62,24 @@ Enable / Disable the feature of FastCGI decrypt.
 #### Directives for memcached
 ##### FastCgiMemcachedServer
 Syntax: FastCgiMemcachedServer hostname:port  
-Default: FastCgiMemcachedServer 127.0.0.1:11211
+Default: FastCgiMemcachedServer 127.0.0.1:11211  
 Context: server config  
 
 Config Memcached server IP and port number.  
 
 #### Directives for user authentication
 ##### FastCgiUserName, FastCgiPassword
-Syntax: FastCgiUserName username, FastCgiPassword password
-Default: FastCgiUserName NONE, FastCgiPassword NONE
-Context: server config  
+Syntax: FastCgiUserName username, FastCgiPassword password  
+Default: FastCgiUserName NONE, FastCgiPassword NONE  
+Context: server config    
+  
+Config user name and password for user authentication of key store  
 
-Config user name and password for user authentication of key store
+#### Directives for logging
+##### FastCgiLogpath
+Syntax: FastCgiLogpath filepath  
+Default: FastCgiLogpath NONE  
+Context: server config    
+  
+Config log file path  
+Need to set user RW permission to the file directory of log  

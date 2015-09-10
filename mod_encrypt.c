@@ -25,6 +25,7 @@
 #include "json.h"
 #include "memcache.h"
 #include "key.h"
+#include "log.h"
 
 #ifndef timersub
 #define	timersub(a, b, result)                              \
@@ -65,6 +66,8 @@ BOOL fcgi_decrypt = TRUE;					/* decrypt flag */
 
 char *fcgi_username = NULL;					/* default FastCGI User Name */
 char *fcgi_password = NULL;					/* default FastCGI Password */
+
+char *fcgi_logpath = NULL;					/* default FastCGI Log file path */
 
 char *fcgi_memcached_server = "127.0.0.1";			/* hostname or IP for memcached server */
 unsigned short fcgi_memcached_port = 11211;				/* port number for memcached server */
@@ -729,10 +732,15 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 	
 	{
 		char bracket[2];
+		char logdata[1024];
 		char masterkeyid[256], datakeyid[256], masterkey[256], iv[256];
 		char *bulk_encrypt = (char *)ap_table_get(r->err_headers_out, "Bulk_encrypt");
 		char *obj_encrypt = (char *)ap_table_get(r->err_headers_out, "Obj_encrypt");
 		char *usermd = (char *)ap_table_get(r->err_headers_out, "X-Scal-Usermd");
+
+		// logging
+		sprintf(logdata, "received metadata, bulk_encrypt:%s, obj_encrypt:%s", bulk_encrypt, obj_encrypt);
+		log_message(ENCRYPT_LOG_TRACK, logdata);
 
 		// get masterkeyid, datakeyid, iv
 		memset(masterkeyid, 0, 256);
@@ -2707,17 +2715,26 @@ static int post_process_for_redirects(request_rec * const r,
 static int content_handler(request_rec *r)
 {
 	fcgi_request *fr = NULL;
+	char logdata[1024];
 	int ret;
 
 #ifdef APACHE2
 	if (strcmp(r->handler, ENCRYPT_HANDLER_NAME))
 		return DECLINED;
 #endif
+
+	// log session start
+	if (r->the_request)
+	{
+		sprintf(logdata, "Session Starting : %s", r->the_request);
+		log_message(ENCRYPT_LOG_INFO, logdata);
+	}
+	
 	/* Setup a new Encrypt request */
 	ret = create_fcgi_request(r, NULL, &fr);
 	if (ret)
 	{
-        	return ret;
+		return ret;
 	}
 
 	/* If its a dynamic invocation, make sure scripts are OK here */
@@ -2745,6 +2762,12 @@ HANDLER_EXIT:
 	CloseCrypt(fr->encryptor.crypt);
 	CloseCrypt(fr->decryptor.crypt);
 	memcache_destroy();
+
+	if (r->the_request)
+	{
+		sprintf(logdata, "Session Ended : %s", r->the_request);
+		log_message(ENCRYPT_LOG_INFO, logdata);
+	}
 
 	return ret;
 }
@@ -3036,6 +3059,8 @@ static const command_rec encrypt_cmds[] =
 
 	AP_INIT_TAKE1("FastCgiUserName",  fcgi_config_set_username, NULL, RSRC_CONF, NULL),
 	AP_INIT_TAKE1("FastCgiPassword",  fcgi_config_set_password, NULL, RSRC_CONF, NULL),
+
+	AP_INIT_TAKE1("FastCgiLogpath",  fcgi_config_set_logpath, NULL, RSRC_CONF, NULL),
 
     AP_INIT_RAW_ARGS("FCGIConfig",    fcgi_config_set_config, NULL, RSRC_CONF, NULL),
     AP_INIT_RAW_ARGS("FastCgiConfig", fcgi_config_set_config, NULL, RSRC_CONF, NULL),

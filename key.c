@@ -10,6 +10,7 @@
 #include "key.h"
 #include "base64.h"
 #include "aes256cbc.h"
+#include "log.h"
 
 #define URL_SIZE 256
 #define BUF_SIZE 1024
@@ -69,6 +70,7 @@ int key_auth_request(request_rec * r, fcgi_crypt * fc, const char *server)
 	char serverurl[URL_SIZE];
 	char senddata[BUF_SIZE];
 	char recvdata[BUF_SIZE];
+	char logdata[BUF_SIZE];
 	char *token;
 	char *timestring = NULL;
 	void *jsonhandler = NULL;
@@ -128,9 +130,15 @@ int key_auth_request(request_rec * r, fcgi_crypt * fc, const char *server)
 
 		/* Perform the request, res will get the return code */ 
 		res = curl_easy_perform(curl);
+		sprintf(logdata, "curl request: %s, username:%s", serverurl, fcgi_username);
+		log_message(ENCRYPT_LOG_TRACK, logdata);
+
 		/* Check for errors */ 
 		if(res != CURLE_OK)
 		{
+			sprintf(logdata, "curl failed: %s", curl_easy_strerror(res));
+			log_message(ENCRYPT_LOG_ERROR, logdata);
+
 			fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 			ret = -1;
 			goto AUTH_REQUEST_EXIT;
@@ -145,6 +153,8 @@ int key_auth_request(request_rec * r, fcgi_crypt * fc, const char *server)
 
 	// process json response
 	jsonhandler = json_load(recvdata);
+	sprintf(logdata, "curl response: %s", recvdata);
+	log_message(ENCRYPT_LOG_TRACK, logdata);
 
 	// get token
 	token = json_get_string(jsonhandler, "token");
@@ -191,6 +201,7 @@ int key_master_request(request_rec * r, fcgi_crypt * fc, const char *server)
 	CURLcode res;
 	char serverurl[URL_SIZE];
 	char recvdata[BUF_SIZE];
+	char logdata[BUF_SIZE];
 	char headerstring[HEADER_SIZE];
 	void *jsonhandler = NULL;
 	char *masterkeyid = NULL;
@@ -236,9 +247,15 @@ int key_master_request(request_rec * r, fcgi_crypt * fc, const char *server)
 
 		/* Perform the request, res will get the return code */ 
 		res = curl_easy_perform(curl);
+		sprintf(logdata, "curl request: %s, username:%s", serverurl, fcgi_username);
+		log_message(ENCRYPT_LOG_TRACK, logdata);
+
 		/* Check for errors */ 
 		if(res != CURLE_OK)
 		{
+			sprintf(logdata, "curl failed: %s", curl_easy_strerror(res));
+			log_message(ENCRYPT_LOG_ERROR, logdata);
+
 			fprintf(stderr, "curl_easy_perform() failed: %s\n",	curl_easy_strerror(res));
 			ret = -1;
 			goto MASTERKEY_EXIT;
@@ -253,6 +270,8 @@ int key_master_request(request_rec * r, fcgi_crypt * fc, const char *server)
 
 	// process json response
 	jsonhandler = json_load(recvdata);
+	sprintf(logdata, "curl response: %s", recvdata);
+	log_message(ENCRYPT_LOG_TRACK, logdata);
 
 	// get key_id
 	masterkeyid = json_get_string(jsonhandler, "key_id");
@@ -314,6 +333,7 @@ int key_data_request(request_rec * r, fcgi_crypt * fc, const char *server)
 	CURLcode res;
 	char serverurl[URL_SIZE];
 	char recvdata[BUF_SIZE];
+	char logdata[BUF_SIZE];
 	char headerstring[HEADER_SIZE];
 	void *jsonhandler=NULL;
 	char *masterkeyid = NULL;
@@ -359,9 +379,15 @@ int key_data_request(request_rec * r, fcgi_crypt * fc, const char *server)
 
 		/* Perform the request, res will get the return code */ 
 		res = curl_easy_perform(curl);
+		sprintf(logdata, "curl request: %s, username:%s", serverurl, fcgi_username);
+		log_message(ENCRYPT_LOG_TRACK, logdata);
+
 		/* Check for errors */ 
 		if(res != CURLE_OK)
 		{
+			sprintf(logdata, "curl failed: %s", curl_easy_strerror(res));
+			log_message(ENCRYPT_LOG_ERROR, logdata);
+
 			fprintf(stderr, "curl_easy_perform() failed: %s\n",	curl_easy_strerror(res));
 			curl_easy_cleanup(curl);
 			curl_slist_free_all( headers ) ;
@@ -377,6 +403,8 @@ int key_data_request(request_rec * r, fcgi_crypt * fc, const char *server)
 
 	// process json response
 	jsonhandler = json_load(recvdata);
+	sprintf(logdata, "curl response: %s", recvdata);
+	log_message(ENCRYPT_LOG_TRACK, logdata);
 
 	// get data key id
 	datakeyid = json_get_string(jsonhandler, "key_id");

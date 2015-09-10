@@ -699,6 +699,24 @@ const char *fcgi_config_set_password(cmd_parms *cmd, void *dummy, const char *ar
 }
 
 /*******************************************************************************
+ * Set Sproxyd log path
+ */
+const char *fcgi_config_set_logpath(cmd_parms *cmd, void *dummy, const char *arg)
+{
+    const char *err = NULL;
+
+    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
+    if (err)
+    {
+        return err;
+    }
+
+	fcgi_logpath = ap_getword_conf(cmd->pool, &arg);
+
+	return NULL;
+}
+
+/*******************************************************************************
  * Configure a static FastCGI server.
  */
 const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const char *arg)

@@ -33,12 +33,13 @@ This is the simple example how to use mod_encyrpt :
       LoadModule encrypt_module modules/mod_encrypt.so
       <IfModule encrypt_module>
           AddHandler encrypt-script .fcgi
-          FastCgiExternalServer /var/www/html/myFCGI -host 192.168.0.1:3000 -masterkeyserver www.masterkeyserver.com -datakeyserver www.datakeyserver.com
-          FastCgiEncrypt On
-          FastCgiDecrypt On
-	  FastCgiMemcachedServer 127.0.0.1:11211
-	  FastCgiUserName test_user
-	  FastCgiPassword test_password
+          FastCgiEncExternalServer /var/www/html/myFCGI -host 192.168.0.1:3000 -masterkeyserver www.masterkeyserver.com -datakeyserver www.datakeyserver.com
+          FastCgiEncEncrypt On
+          FastCgiEncDecrypt On
+	  FastCgiEncMemcachedServer 127.0.0.1:11211
+	  FastCgiEncUserName test_user
+	  FastCgiEncPassword test_password
+	  FastCgiEncLogpath /var/log/apache2/encrypt.log 3
       </IfModule>
 
 myFCGI and host IP/Port should be changed in your case.  
@@ -77,9 +78,10 @@ Config user name and password for user authentication of key store
 
 #### Directives for logging
 ##### FastCgiLogpath
-Syntax: FastCgiLogpath filepath  
+Syntax: FastCgiLogpath filepath level 
 Default: FastCgiLogpath NONE  
 Context: server config    
   
-Config log file path  
+Config log file path and level  
 Need to set user RW permission to the file directory of log  
+level 0:Error, 1:Warning, 2:Info, 3:Track  

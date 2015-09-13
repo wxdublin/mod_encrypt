@@ -533,7 +533,7 @@ const char *fcgi_config_set_encrypt(cmd_parms *cmd, void *dummy, const char *arg
 const char *fcgi_config_set_decrypt(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_username(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_password(cmd_parms *cmd, void *dummy, const char *arg);
-const char *fcgi_config_set_logpath(cmd_parms *cmd, void *dummy, const char *arg);
+const char *fcgi_config_set_logpath(cmd_parms *cmd, void *dummy, const char *arg1, const char *arg2);
 apcb_t fcgi_config_reset_globals(void * dummy);
 const char *fcgi_config_set_env_var(pool *p, char **envp, unsigned int *envc, char * var);
 
@@ -643,10 +643,11 @@ typedef int BOOL;
 extern BOOL fcgi_encrypt;					/* encrypt flag */
 extern BOOL fcgi_decrypt;					/* decrypt flag */
 
-extern char *fcgi_username;					/* default FastCGI User Name */
-extern char *fcgi_password;					/* default FastCGI Password */
+extern char *fcgi_username;					/* FastCGI User Name */
+extern char *fcgi_password;					/* FastCGI Password */
 
-extern char *fcgi_logpath;					/* default FastCGI Log file path */
+extern char *fcgi_logpath;					/* FastCGI Log file path */
+extern int fcgi_loglevel;					/* FastCGI Log level */
 
 extern char *fcgi_memcached_server;
 extern unsigned short fcgi_memcached_port;

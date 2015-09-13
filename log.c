@@ -27,6 +27,10 @@ void log_message(int log_level, char *log_message)
 	if (!fcgi_logpath || !log_message)
 		return;
 
+	// if log_level > log level config, do not log
+	if (fcgi_loglevel < log_level)
+		return;
+
 	time (&rawtime);
 	timeinfo = localtime (&rawtime);
 	strftime (timebuf, 64, "%Y-%m-%d %H:%M:%S", timeinfo);

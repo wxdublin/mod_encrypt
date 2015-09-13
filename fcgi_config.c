@@ -9,6 +9,7 @@
 
 #include <limits.h>
 #include "mpm_common.h"     /* ap_uname2id, ap_gname2id */
+#include "log.h"
 
 #ifdef WIN32
 #include <direct.h>
@@ -701,7 +702,7 @@ const char *fcgi_config_set_password(cmd_parms *cmd, void *dummy, const char *ar
 /*******************************************************************************
  * Set Sproxyd log path
  */
-const char *fcgi_config_set_logpath(cmd_parms *cmd, void *dummy, const char *arg)
+const char *fcgi_config_set_logpath(cmd_parms *cmd, void *dummy, const char *arg1, const char *arg2)
 {
     const char *err = NULL;
 
@@ -711,8 +712,16 @@ const char *fcgi_config_set_logpath(cmd_parms *cmd, void *dummy, const char *arg
         return err;
     }
 
-	fcgi_logpath = ap_getword_conf(cmd->pool, &arg);
+	if (arg1)
+		fcgi_logpath = ap_getword_conf(cmd->pool, &arg1);
 
+	if (arg2)
+	{
+		fcgi_loglevel = atoi(arg2);
+		if ((fcgi_loglevel < ENCRYPT_LOG_ERROR) || (fcgi_loglevel > ENCRYPT_LOG_TRACK))
+			fcgi_loglevel = ENCRYPT_LOG_ERROR;
+	}
+	
 	return NULL;
 }
 

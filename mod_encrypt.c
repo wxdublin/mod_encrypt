@@ -68,6 +68,7 @@ char *fcgi_username = NULL;					/* default FastCGI User Name */
 char *fcgi_password = NULL;					/* default FastCGI Password */
 
 char *fcgi_logpath = NULL;					/* default FastCGI Log file path */
+int fcgi_loglevel = ENCRYPT_LOG_ERROR;		/* default FastCGI Log level */
 
 char *fcgi_memcached_server = "127.0.0.1";			/* hostname or IP for memcached server */
 unsigned short fcgi_memcached_port = 11211;				/* port number for memcached server */
@@ -3045,22 +3046,22 @@ static const command_rec encrypt_cmds[] =
     AP_INIT_RAW_ARGS("FastCgiServer", fcgi_config_new_static_server, NULL, RSRC_CONF, NULL),
 
     AP_INIT_RAW_ARGS("ExternalAppClass",      fcgi_config_new_external_server, NULL, RSRC_CONF, NULL),
-    AP_INIT_RAW_ARGS("FastCgiExternalServer", fcgi_config_new_external_server, NULL, RSRC_CONF, NULL),
+    AP_INIT_RAW_ARGS("FastCgiEncExternalServer", fcgi_config_new_external_server, NULL, RSRC_CONF, NULL),
 
-	AP_INIT_TAKE1("FastCgiMemcachedServer",  fcgi_config_set_memcached, NULL, RSRC_CONF, NULL),
+	AP_INIT_TAKE1("FastCgiEncMemcachedServer",  fcgi_config_set_memcached, NULL, RSRC_CONF, NULL),
 
     AP_INIT_TAKE1("FastCgiIpcDir", fcgi_config_set_socket_dir, NULL, RSRC_CONF, NULL),
 
     AP_INIT_TAKE1("FastCgiSuexec",  fcgi_config_set_wrapper, NULL, RSRC_CONF, NULL),
     AP_INIT_TAKE1("FastCgiWrapper", fcgi_config_set_wrapper, NULL, RSRC_CONF, NULL),
 
-	AP_INIT_TAKE1("FastCgiEncrypt",  fcgi_config_set_encrypt, NULL, RSRC_CONF, NULL),
-	AP_INIT_TAKE1("FastCgiDecrypt",  fcgi_config_set_decrypt, NULL, RSRC_CONF, NULL),
+	AP_INIT_TAKE1("FastCgiEncEncrypt",  fcgi_config_set_encrypt, NULL, RSRC_CONF, NULL),
+	AP_INIT_TAKE1("FastCgiEncDecrypt",  fcgi_config_set_decrypt, NULL, RSRC_CONF, NULL),
 
-	AP_INIT_TAKE1("FastCgiUserName",  fcgi_config_set_username, NULL, RSRC_CONF, NULL),
-	AP_INIT_TAKE1("FastCgiPassword",  fcgi_config_set_password, NULL, RSRC_CONF, NULL),
+	AP_INIT_TAKE1("FastCgiEncUserName",  fcgi_config_set_username, NULL, RSRC_CONF, NULL),
+	AP_INIT_TAKE1("FastCgiEncPassword",  fcgi_config_set_password, NULL, RSRC_CONF, NULL),
 
-	AP_INIT_TAKE1("FastCgiLogpath",  fcgi_config_set_logpath, NULL, RSRC_CONF, NULL),
+	AP_INIT_TAKE2("FastCgiEncLogpath",  fcgi_config_set_logpath, NULL, RSRC_CONF, NULL),
 
     AP_INIT_RAW_ARGS("FCGIConfig",    fcgi_config_set_config, NULL, RSRC_CONF, NULL),
     AP_INIT_RAW_ARGS("FastCgiConfig", fcgi_config_set_config, NULL, RSRC_CONF, NULL),

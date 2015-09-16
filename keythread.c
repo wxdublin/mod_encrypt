@@ -620,16 +620,12 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 			memcache_delete(CACHE_KEYNAME_ENCRYPTEDDATAKEY);
 			memcache_delete(CACHE_KEYNAME_DATAKEY);
 		}
-		else
-		{
-			// if no error, sleep 30 seconds
-#ifdef WIN32
-			Sleep(30000);
-#else
-			sleep(30);
-#endif
 
-		}
+#ifdef WIN32
+		Sleep(30000);
+#else
+		sleep(30);
+#endif
 	}
 	
 	apr_thread_exit(thd, APR_SUCCESS);

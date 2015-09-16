@@ -2783,7 +2783,10 @@ static int content_handler(request_rec *r)
 			goto HANDLER_EXIT;
 		}
 		
+		// first read the keys from key server and store into memcache
+		key_thread_init();
 
+		// create key thread
 		if (ThreadPool)
 		{
 			apr_pool_destroy(ThreadPool);
@@ -2793,17 +2796,9 @@ static int content_handler(request_rec *r)
 		apr_pool_create(&ThreadPool, NULL);
 		apr_threadattr_create(&thread_attr, ThreadPool);
 		rv = apr_thread_create(&Thread, thread_attr, key_thread_func, NULL, ThreadPool);
-		if (rv == APR_SUCCESS)
+		if (rv != APR_SUCCESS)
 		{
-#ifdef WIN32
-			Sleep(3000);
-#else
-			sleep(3);
-#endif
-		}
-		else
-		{
-			sprintf(logdata, "Could not start key thread");
+			sprintf(logdata, "Could not start key thread, please check parameters and server addresses");
 			log_message(ENCRYPT_LOG_ERROR, logdata);
 
 			ret = HTTP_FORBIDDEN;

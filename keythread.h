@@ -6,5 +6,6 @@
 #define _KEY_THREAD_H__
 
 void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params);
+void key_thread_init(void);
 
 #endif // _KEY_THREAD_H__

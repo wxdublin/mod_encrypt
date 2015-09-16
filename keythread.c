@@ -145,7 +145,7 @@ static size_t readFn(void* ptr, size_t size, size_t nmemb, void* userdata) {
 /**
  * Get Authentication Token from server
  */
-static unsigned int get_auth_token(char *tokenstr)
+static int get_auth_token(char *tokenstr)
 {
 	int ret;
 	CURL *curl = NULL;
@@ -155,7 +155,7 @@ static unsigned int get_auth_token(char *tokenstr)
 	char *token;
 	char *timestring = NULL;
 	void *jsonhandler = NULL;
-	unsigned int timediff;
+	int timediff;
 	struct curl_slist* headers = NULL;
 
 	// check parameters
@@ -246,7 +246,7 @@ static unsigned int get_auth_token(char *tokenstr)
 	tokenstr[strlen(token)] = 0;
 
 	// store into memcache
-	timediff = time_utc_diff(timestring);
+	timediff = (int)time_utc_diff(timestring);
 
 	ret = timediff;
 
@@ -266,7 +266,7 @@ AUTH_REQUEST_EXIT:
 static unsigned int get_master_key(const char *token, char *masterkeyid, char *masterkey, char *iv)
 {
 	int ret;
-	unsigned int timeout;
+	int timeout;
 	CURL *curl = NULL;
 	CURLcode res;
 	char serverurl[URL_SIZE];
@@ -400,7 +400,7 @@ MASTERKEY_EXIT:
 /**
  * Get Data Key from server
  */
-static unsigned int get_data_key(const char *token, char *masterkeyid, char *datakeyid, char *datakey)
+static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, char *datakey)
 {
 	int ret;
 	CURL *curl;
@@ -545,7 +545,7 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 {
 	int ret;
 	fcgi_crypt fc;
-	unsigned int timeout;
+	int timeout;
 	
 	// check parameters
 	if (!fcgi_username || !fcgi_password || !fcgi_authserver || !fcgi_masterkeyserver || !fcgi_datakeyserver)
@@ -635,4 +635,72 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 	apr_thread_exit(thd, APR_SUCCESS);
 
     return NULL;
+}
+
+/**
+ * first read the keys from key server and store into memcache
+ */
+void key_thread_init(void)
+{
+	int ret;
+	fcgi_crypt fc;
+	int timeout;
+	
+	// check parameters
+	if (!fcgi_username || !fcgi_password || !fcgi_authserver || !fcgi_masterkeyserver || !fcgi_datakeyserver)
+	{
+		return;
+	}
+
+	timeout = 0;
+	
+	// initialize fc
+	memset(&fc, 0, sizeof(fcgi_crypt));
+	
+	// Authentication Token
+	timeout = get_auth_token(fc.token);
+	if (timeout > 0)
+	{
+		memcache_set_timeout(CACHE_KEYNAME_AUTHTOKEN, fc.token, timeout);
+	}
+
+	timeout = get_master_key(fc.token, fc.masterKeyId, fc.masterKey, fc.initializationVector);
+	if (timeout > 0)
+	{
+		memcache_set_timeout(CACHE_KEYNAME_MAKSTERKEYID, fc.masterKeyId, timeout);
+		memcache_set_timeout(CACHE_KEYNAME_MAKSTERKEY, fc.masterKey, timeout);
+		memcache_set_timeout(CACHE_KEYNAME_IV, fc.initializationVector, timeout);
+	}
+
+	// Data Key
+	timeout = get_data_key(fc.token, fc.masterKeyId, fc.dataKeyId, fc.encryptedDataKey);
+	if (timeout > 0)
+	{
+		memcache_set_timeout(CACHE_KEYNAME_DATAKEYID, fc.dataKeyId, timeout);
+		memcache_set_timeout(CACHE_KEYNAME_ENCRYPTEDDATAKEY, fc.encryptedDataKey, timeout);
+	}
+ 
+	ret = key_calculate_real(&fc);
+	if (ret == 0)
+	{
+		char dataKeyCacheName[KEY_SIZE];
+		memset(dataKeyCacheName, 0, KEY_SIZE);
+		sprintf(dataKeyCacheName, "fastcgi-%s-%s-%s", fc.masterKeyId, fc.dataKeyId, fcgi_username);
+		memcache_set_timeout(dataKeyCacheName, fc.dataKey, KEY_STORE_PERIOD);
+		memcache_set_timeout(CACHE_KEYNAME_DATAKEY, fc.dataKey, KEY_STORE_PERIOD);
+	}
+
+	if (timeout < 0)
+	{
+		// This is error, so delete all keys in memcache
+		memcache_delete(CACHE_KEYNAME_AUTHTOKEN);
+		memcache_delete(CACHE_KEYNAME_MAKSTERKEYID);
+		memcache_delete(CACHE_KEYNAME_MAKSTERKEY);
+		memcache_delete(CACHE_KEYNAME_IV);
+		memcache_delete(CACHE_KEYNAME_DATAKEYID);
+		memcache_delete(CACHE_KEYNAME_ENCRYPTEDDATAKEY);
+		memcache_delete(CACHE_KEYNAME_DATAKEY);
+	}
+
+	return;
 }

@@ -141,7 +141,7 @@ static size_t readFn(void* ptr, size_t size, size_t nmemb, void* userdata) {
 /**
  * Get Authentication Token from server
  */
-static unsigned int get_auth_token(char *tokenstr)
+static int get_auth_token(char *tokenstr)
 {
 	int ret;
 	CURL *curl = NULL;
@@ -151,7 +151,7 @@ static unsigned int get_auth_token(char *tokenstr)
 	char *token;
 	char *timestring = NULL;
 	void *jsonhandler = NULL;
-	unsigned int timediff;
+	int timediff;
 	struct curl_slist* headers = NULL;
 
 	// check parameters
@@ -242,7 +242,7 @@ static unsigned int get_auth_token(char *tokenstr)
 	tokenstr[strlen(token)] = 0;
 
 	// store into memcache
-	timediff = time_utc_diff(timestring);
+	timediff = (int)time_utc_diff(timestring);
 
 	ret = timediff;
 
@@ -259,10 +259,10 @@ AUTH_REQUEST_EXIT:
 /**
  * Get Master Key from server
  */
-static unsigned int get_master_key(const char *token, char *masterkeyid, char *masterkey, char *iv)
+static int get_master_key(const char *token, char *masterkeyid, char *masterkey, char *iv)
 {
 	int ret;
-	unsigned int timeout;
+	int timeout;
 	CURL *curl = NULL;
 	CURLcode res;
 	char serverurl[URL_SIZE];
@@ -396,7 +396,7 @@ MASTERKEY_EXIT:
 /**
  * Get Data Key from server
  */
-static unsigned int get_data_key(const char *token, char *masterkeyid, char *datakeyid, char *datakey)
+static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, char *datakey)
 {
 	int ret;
 	CURL *curl;

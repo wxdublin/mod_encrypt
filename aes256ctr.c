@@ -93,6 +93,9 @@ EVP_CIPHER_CTX *InitAesCtr(unsigned char *keydata, int keydata_len)
 
 void UninitAesCtr(EVP_CIPHER_CTX *ctx)
 {
+	if (!ctx)
+		return;
+
 	/* Clean up */
 	EVP_CIPHER_CTX_free(ctx);
 

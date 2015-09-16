@@ -33,9 +33,12 @@ This is the simple example how to use mod_encyrpt :
       LoadModule encrypt_module modules/mod_encrypt.so
       <IfModule encrypt_module>
           AddHandler encrypt-script .fcgi
-          FastCgiEncExternalServer /var/www/html/myFCGI -host 192.168.0.1:3000 -masterkeyserver www.masterkeyserver.com -datakeyserver www.datakeyserver.com
+          FastCgiEncExternalServer /var/www/html/myFCGI -host 192.168.0.1:3000
           FastCgiEncEncrypt On
           FastCgiEncDecrypt On
+	  FastCgiEncAuthServer 52.25.196.147
+	  FastCgiEncMasterKeyServer 52.25.196.147
+	  FastCgiEncDataKeyServer 52.25.196.147
 	  FastCgiEncMemcachedServer 127.0.0.1:11211
 	  FastCgiEncUserName test_user
 	  FastCgiEncPassword test_password
@@ -48,38 +51,60 @@ $ curl -v -XPUT http://localhost/myFCGI --data-binary teststring
 
 #### Directives for encyption
 ##### FastCgiEncrypt
-Syntax: FastCgiEncrypt _On_ / _Off_  
-Default: FastCgiEncrypt On  
+Syntax: FastCgiEncEncrypt _On_ / _Off_  
+Default: FastCgiEncEncrypt On  
 Context: server config  
 
 Enable / Disable the feature of FastCGI encrypt.  
+
 ##### FastCgiDecrypt
-Syntax: FastCgiDecrypt _On_ / _Off_  
-Default: FastCgiDecrypt On  
+Syntax: FastCgiEncDecrypt _On_ / _Off_  
+Default: FastCgiEncDecrypt On  
 Context: server config  
 
 Enable / Disable the feature of FastCGI decrypt.  
 
+##### FastCgiEncAuthServer
+Syntax: FastCgiEncAuthServer URL(IP address)  
+Default: FastCgiEncAuthServer NONE  
+Context: server config  
+
+Config Authenticateion server name or IP address.  
+
+##### FastCgiEncMasterKeyServer
+Syntax: FastCgiEncMasterKeyServer URL(IP address)  
+Default: FastCgiEncMasterKeyServer NONE  
+Context: server config  
+
+Config Master key server name or IP address.  
+
+##### FastCgiEncDataKeyServer
+Syntax: FastCgiEncDataKeyServer URL(IP address)  
+Default: FastCgiEncDataKeyServer NONE  
+Context: server config  
+
+Config Data key server name or IP address.  
+
 #### Directives for memcached
-##### FastCgiMemcachedServer
-Syntax: FastCgiMemcachedServer hostname:port  
-Default: FastCgiMemcachedServer 127.0.0.1:11211  
+##### FastCgiEncMemcachedServer
+Syntax: FastCgiEncMemcachedServer hostname:port  
+Default: FastCgiEncMemcachedServer 127.0.0.1:11211  
 Context: server config  
 
 Config Memcached server IP and port number.  
 
 #### Directives for user authentication
-##### FastCgiUserName, FastCgiPassword
-Syntax: FastCgiUserName username, FastCgiPassword password  
-Default: FastCgiUserName NONE, FastCgiPassword NONE  
+##### FastCgiEncUserName, FastCgiEncPassword
+Syntax: FastCgiEncUserName username, FastCgiEncPassword password  
+Default: FastCgiEncUserName NONE, FastCgiEncPassword NONE  
 Context: server config    
   
 Config user name and password for user authentication of key store  
 
 #### Directives for logging
-##### FastCgiLogpath
-Syntax: FastCgiLogpath filepath level 
-Default: FastCgiLogpath NONE  
+##### FastCgiEncLogpath
+Syntax: FastCgiEncLogpath filepath level 
+Default: FastCgiEncLogpath NONE  
 Context: server config    
   
 Config log file path and level  

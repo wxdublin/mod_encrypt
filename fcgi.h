@@ -291,9 +291,10 @@ typedef struct {
 
 	char token[256];
 	char masterKeyId[256];
-	char masterKey[64];
-	char initializationVector[64];
+	char masterKey[256];
+	char initializationVector[256];
 	char dataKeyId[256];
+	char encryptedDataKey[256];
 	char dataKey[256];
 	int dataKeyLength;
 } fcgi_crypt;
@@ -531,6 +532,9 @@ const char *fcgi_config_set_wrapper(cmd_parms *cmd, void *dummy, const char *arg
 const char *fcgi_config_set_memcached(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_encrypt(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_decrypt(cmd_parms *cmd, void *dummy, const char *arg);
+const char *fcgi_config_set_authserver(cmd_parms *cmd, void *dummy, const char *arg);
+const char *fcgi_config_set_masterkeyserver(cmd_parms *cmd, void *dummy, const char *arg);
+const char *fcgi_config_set_datakeyserver(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_username(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_password(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_logpath(cmd_parms *cmd, void *dummy, const char *arg1, const char *arg2);
@@ -642,6 +646,10 @@ typedef int BOOL;
 
 extern BOOL fcgi_encrypt;					/* encrypt flag */
 extern BOOL fcgi_decrypt;					/* decrypt flag */
+
+extern char *fcgi_authserver;				/* FastCGI Auth Server */
+extern char *fcgi_masterkeyserver;			/* FastCGI Master Key Server */
+extern char *fcgi_datakeyserver;			/* FastCGI Data Key Server */
 
 extern char *fcgi_username;					/* FastCGI User Name */
 extern char *fcgi_password;					/* FastCGI Password */

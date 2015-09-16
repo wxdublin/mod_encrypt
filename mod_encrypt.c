@@ -25,6 +25,7 @@
 #include "json.h"
 #include "memcache.h"
 #include "key.h"
+#include "keythread.h"
 #include "log.h"
 
 #ifndef timersub
@@ -63,6 +64,10 @@ char *fcgi_dynamic_dir = NULL;				/* directory for the dynamic
 
 BOOL fcgi_encrypt = TRUE;					/* encrypt flag */
 BOOL fcgi_decrypt = TRUE;					/* decrypt flag */
+
+char *fcgi_authserver = NULL;				/* FastCGI Auth Server */
+char *fcgi_masterkeyserver = NULL;			/* FastCGI Master Key Server */
+char *fcgi_datakeyserver = NULL;			/* FastCGI Data Key Server */
 
 char *fcgi_username = NULL;					/* default FastCGI User Name */
 char *fcgi_password = NULL;					/* default FastCGI Password */
@@ -750,6 +755,7 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 		memset(iv, 0, 256);
 		if (bulk_encrypt && obj_encrypt)
 		{
+			int ret;
 			fcgi_crypt *fc;
 			sscanf(bulk_encrypt, "%c %s %s %c", &bracket[0], masterkeyid, datakeyid, &bracket[1]);
 			sscanf(obj_encrypt, "%c %s %s %c", &bracket[0], masterkey, iv, &bracket[1]);
@@ -771,19 +777,23 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 			ap_table_unset(r->err_headers_out, "Bulk_encrypt");
 			ap_table_unset(r->err_headers_out, "Obj_encrypt");
 
-			CloseCrypt(fr->decryptor.crypt);
-			fr->decryptor.crypt = InitDecrypt(r, fr);
+			CloseCrypt(&fr->decryptor);
+			ret = InitDecrypt(&fr->decryptor);
+			if (ret < 0)
+				return ap_psprintf(r->pool, "could not retrieve old keys");
 		}
 		
 		if ((usermd) && (fcgi_decrypt == TRUE))
 		{
-			int i;
+			int i, ret;
 			len = strlen(usermd);
 
-			CloseCrypt(fr->decryptor.crypt);
-			fr->decryptor.crypt = InitDecrypt(r, fr);
+			CloseCrypt(&fr->decryptor);
+			ret = InitDecrypt(&fr->decryptor);
+			if (ret < 0)
+				return ap_psprintf(r->pool, "could not retrieve old keys");
 
-			CryptDataStream(fr->decryptor.crypt, usermd, 0, len);
+			CryptDataStream(&fr->decryptor, usermd, 0, len);
 			for (i=0; i<len; i++) 
 			{
 				unsigned char ch = usermd[i];
@@ -794,8 +804,10 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 				}
 			}
 
-			CloseCrypt(fr->decryptor.crypt);
-			fr->decryptor.crypt = InitDecrypt(r, fr);
+			CloseCrypt(&fr->decryptor);
+			ret = InitDecrypt(&fr->decryptor);
+			if (ret < 0)
+				return ap_psprintf(r->pool, "could not retrieve old keys");
 		}
 	}
 
@@ -915,7 +927,7 @@ static int read_from_client_n_queue(fcgi_request *fr)
         else {
 			if (fcgi_encrypt == TRUE)
 			{
-				CryptDataStream(fr->encryptor.crypt, end, 0, countRead);
+				CryptDataStream(&fr->encryptor, end, 0, countRead);
 			}
 			
             fcgi_buf_add_update(fr->clientInputBuffer, countRead);
@@ -943,12 +955,12 @@ static int write_to_client(fcgi_request *fr)
 			(fr->decryptor.offset >= fr->decryptor.count))
 		{
 			int offset = fr->decryptor.offset - fr->decryptor.count;
-			CryptDataStream(fr->decryptor.crypt, fr->clientOutputBuffer->data, offset, count);
+			CryptDataStream(&fr->decryptor, fr->clientOutputBuffer->data, offset, count);
 			fr->decryptor.offset = 0;
 		}
 		else
 		{
-			CryptDataStream(fr->decryptor.crypt, fr->clientOutputBuffer->data, 0, count);
+			CryptDataStream(&fr->decryptor, fr->clientOutputBuffer->data, 0, count);
 		}
 		fr->decryptor.count += count;
 	}
@@ -2713,6 +2725,10 @@ static int post_process_for_redirects(request_rec * const r,
 /******************************************************************************
  * Process encrypt-script requests.  Based on mod_cgi::cgi_handler().
  */
+
+static apr_pool_t *ThreadPool = NULL;
+static apr_thread_t *Thread = NULL;
+
 static int content_handler(request_rec *r)
 {
 	fcgi_request *fr = NULL;
@@ -2730,7 +2746,7 @@ static int content_handler(request_rec *r)
 		sprintf(logdata, "Session Starting : %s", r->the_request);
 		log_message(ENCRYPT_LOG_INFO, logdata);
 	}
-	
+
 	/* Setup a new Encrypt request */
 	ret = create_fcgi_request(r, NULL, &fr);
 	if (ret)
@@ -2742,15 +2758,51 @@ static int content_handler(request_rec *r)
 	if (fr->dynamic && ! (ap_allow_options(r) & OPT_EXECCGI) && ! apache_is_scriptaliased(r)) 
 	{
 		ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r, "Encrypt: \"ExecCGI Option\" is off in this directory: %s", r->uri);
-		return HTTP_FORBIDDEN;
+		ret = HTTP_FORBIDDEN;
+		goto HANDLER_EXIT;
 	}
 
-	// Initialize memcache
-	memcache_init(fcgi_memcached_server, fcgi_memcached_port);
+	/* Create thread for key management */
+	if (!Thread)
+	{
+		apr_threadattr_t *thread_attr;
+		apr_status_t rv;
+
+		// Initialize memcache
+		memcache_destroy();
+		memcache_init(fcgi_memcached_server, fcgi_memcached_port);
+
+		if (ThreadPool)
+		{
+			apr_pool_destroy(ThreadPool);
+			ThreadPool = NULL;
+		}
+
+		apr_pool_create(&ThreadPool, NULL);
+		apr_threadattr_create(&thread_attr, ThreadPool);
+		rv = apr_thread_create(&Thread, thread_attr, key_thread_func, NULL, ThreadPool);
+		if (rv == APR_SUCCESS)
+		{
+#ifdef WIN32
+			Sleep(3000);
+#else
+			sleep(3);
+#endif
+		}
+	}
 
 	// if PUT, initialize encrypt
 	if (!strcasecmp(r->method, "PUT"))
-		fr->encryptor.crypt = InitEncrypt(r, fr);
+	{
+		ret = InitEncrypt(&fr->encryptor);
+
+		if (ret < 0)
+		{
+			ret = HTTP_FORBIDDEN;
+			goto HANDLER_EXIT;
+		}
+	}
+	
 
 	/* Process the encrypt-script request */
 	if ((ret = do_work(r, fr)) != OK)
@@ -2760,13 +2812,12 @@ static int content_handler(request_rec *r)
 	ret = post_process_for_redirects(r, fr);
 
 HANDLER_EXIT:
-	CloseCrypt(fr->encryptor.crypt);
-	CloseCrypt(fr->decryptor.crypt);
-	memcache_destroy();
+	CloseCrypt(&fr->encryptor);
+	CloseCrypt(&fr->decryptor);
 
 	if (r->the_request)
 	{
-		sprintf(logdata, "Session Ended : %s", r->the_request);
+		sprintf(logdata, "Session Ended : %s (Error Code %d)", r->the_request, ret);
 		log_message(ENCRYPT_LOG_INFO, logdata);
 	}
 
@@ -3057,6 +3108,10 @@ static const command_rec encrypt_cmds[] =
 
 	AP_INIT_TAKE1("FastCgiEncEncrypt",  fcgi_config_set_encrypt, NULL, RSRC_CONF, NULL),
 	AP_INIT_TAKE1("FastCgiEncDecrypt",  fcgi_config_set_decrypt, NULL, RSRC_CONF, NULL),
+
+	AP_INIT_TAKE1("FastCgiEncAuthServer",  fcgi_config_set_authserver, NULL, RSRC_CONF, NULL),
+	AP_INIT_TAKE1("FastCgiEncMasterKeyServer",  fcgi_config_set_masterkeyserver, NULL, RSRC_CONF, NULL),
+	AP_INIT_TAKE1("FastCgiEncDataKeyServer",  fcgi_config_set_datakeyserver, NULL, RSRC_CONF, NULL),
 
 	AP_INIT_TAKE1("FastCgiEncUserName",  fcgi_config_set_username, NULL, RSRC_CONF, NULL),
 	AP_INIT_TAKE1("FastCgiEncPassword",  fcgi_config_set_password, NULL, RSRC_CONF, NULL),

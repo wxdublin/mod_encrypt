@@ -664,6 +664,60 @@ const char *fcgi_config_set_decrypt(cmd_parms *cmd, void *dummy, const char *arg
 }
 
 /*******************************************************************************
+ * Set Sproxyd Authentication Server.
+ */
+const char *fcgi_config_set_authserver(cmd_parms *cmd, void *dummy, const char *arg)
+{
+    const char *err = NULL;
+
+    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
+    if (err)
+    {
+        return err;
+    }
+
+	fcgi_authserver = ap_getword_conf(cmd->pool, &arg);
+
+	return NULL;
+}
+
+/*******************************************************************************
+ * Set Sproxyd Master Key Server.
+ */
+const char *fcgi_config_set_masterkeyserver(cmd_parms *cmd, void *dummy, const char *arg)
+{
+    const char *err = NULL;
+
+    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
+    if (err)
+    {
+        return err;
+    }
+
+	fcgi_masterkeyserver = ap_getword_conf(cmd->pool, &arg);
+
+	return NULL;
+}
+
+/*******************************************************************************
+ * Set Sproxyd Data Key Server.
+ */
+const char *fcgi_config_set_datakeyserver(cmd_parms *cmd, void *dummy, const char *arg)
+{
+    const char *err = NULL;
+
+    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
+    if (err)
+    {
+        return err;
+    }
+
+	fcgi_datakeyserver = ap_getword_conf(cmd->pool, &arg);
+
+	return NULL;
+}
+
+/*******************************************************************************
  * Set Sproxyd User Name.
  */
 const char *fcgi_config_set_username(cmd_parms *cmd, void *dummy, const char *arg)
@@ -1088,16 +1142,6 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
                 return invalid_value(tp, name, fs_path, option, "\"\"");
 #endif
         }
-		else if (strcasecmp(option, "-masterkeyserver") == 0) {
-			s->master_key_server = ap_getword_conf(p, &arg);
-			if (*s->master_key_server == '\0')
-				return invalid_value(tp, name, fs_path, option, "\"\"");
-		}
-		else if (strcasecmp(option, "-datakeyserver") == 0) {
-			s->data_key_server = ap_getword_conf(p, &arg);
-			if (*s->data_key_server == '\0')
-				return invalid_value(tp, name, fs_path, option, "\"\"");
-		}
         else {
             return ap_psprintf(tp, "%s %s: invalid option: %s", name, fs_path, option);
         }

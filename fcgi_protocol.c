@@ -287,11 +287,11 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
 					buff = malloc(env->valueLen);
 					memcpy(buff, env->equalPtr, len);
 
-					CloseCrypt(fr->encryptor.crypt);
-					fr->encryptor.crypt = InitEncrypt(r, fr);
+					CloseCrypt(&fr->encryptor);
+					InitEncrypt(&fr->encryptor);
 
 					// Remove special characters in ciphered text
-					CryptDataStream(fr->encryptor.crypt, buff, 0, len);
+					CryptDataStream(&fr->encryptor, buff, 0, len);
 					for (i=0; i<len; i++) 
 					{
 						if ((buff[i] == '\r') || (buff[i] == '\n') || (buff[i] == '\0') || 
@@ -300,14 +300,14 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
 						}
 					}
 
-					CloseCrypt(fr->encryptor.crypt);
-					fr->encryptor.crypt = InitEncrypt(r, fr);
+					CloseCrypt(&fr->encryptor);
+					InitEncrypt(&fr->encryptor);
 
 					// crypt again after removing special characters
-					CryptDataStream(fr->encryptor.crypt, env->equalPtr, 0, len);
+					CryptDataStream(&fr->encryptor, env->equalPtr, 0, len);
 
-					CloseCrypt(fr->encryptor.crypt);
-					fr->encryptor.crypt = InitEncrypt(r, fr);
+					CloseCrypt(&fr->encryptor);
+					InitEncrypt(&fr->encryptor);
 
 					free(buff);
 

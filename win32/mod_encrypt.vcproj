@@ -509,6 +509,22 @@
 				>
 			</File>
 			<File
+				RelativePath="..\keythread.c"
+				>
+			</File>
+			<File
+				RelativePath="..\keythread.h"
+				>
+			</File>
+			<File
+				RelativePath="..\log.c"
+				>
+			</File>
+			<File
+				RelativePath="..\log.h"
+				>
+			</File>
+			<File
 				RelativePath="..\memcache.c"
 				>
 			</File>

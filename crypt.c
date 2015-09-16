@@ -22,90 +22,101 @@
 
 //////////////////////////////////////////////////////////////////////////
 
-void *InitEncrypt(request_rec * r, fcgi_request * fr)
+int InitEncrypt(fcgi_crypt * encryptor)
 {
-	if (fr->encryptor.dataKeyLength == 0)
+	if (encryptor->dataKeyLength == 0)
 	{
-		// key authorization
-		if (key_auth_request(r, &fr->encryptor, fr->fs->master_key_server) < 0)
-			return NULL;
+// 		encryptor->dataKeyLength = 15;
+// 		strcpy(encryptor->dataKey, "deadbeef0123456");
+// 		encryptor->dataKey[15] = 0;
+// 		strcpy(encryptor->masterKeyId, "5e0e9463-acc2-45c7-91a4-ce730f68842b");
+// 		strcpy(encryptor->dataKeyId, "2bae2abd-2615-47d9-a508-fe1b7a417ccd");
 
-		// get master key
-		if (key_master_request(r, &fr->encryptor, fr->fs->master_key_server) < 0)
-			return NULL;
-
-		// get data key
-		if (key_data_request(r, &fr->encryptor, fr->fs->data_key_server) < 0)
-			return NULL;
+		// get active key
+ 		if (key_active_request(encryptor) < 0)
+ 			return -1;
 	}
 	
-	return (void *)InitAesCtr(fr->encryptor.dataKey, fr->encryptor.dataKeyLength);
+	encryptor->crypt = InitAesCtr(encryptor->dataKey, encryptor->dataKeyLength);
+
+	if (encryptor->crypt == NULL)
+	{
+		return -1;
+	}
+	
+	return 0;
 }
 
-void *InitDecrypt(request_rec * r, fcgi_request * fr)
+int InitDecrypt(fcgi_crypt * decryptor)
 {
-	if (fr->decryptor.dataKeyLength == 0)
+	if (decryptor->dataKeyLength == 0)
 	{
-		// key authorization
-		if (key_auth_request(r, &fr->decryptor, fr->fs->master_key_server) < 0)
-			return NULL;
+// 		decryptor->dataKeyLength = 15;
+// 		strcpy(decryptor->dataKey, "deadbeef0123456");
+// 		decryptor->dataKey[15] = 0;
 
-		// get master key
-		if (key_master_request(r, &fr->decryptor, fr->fs->master_key_server) < 0)
-			return NULL;
-
-		// get data key
-		if (key_data_request(r, &fr->decryptor, fr->fs->data_key_server) < 0)
-			return NULL;
+		// get active key
+ 		if (key_old_request(decryptor) < 0)
+ 			return -1;
 	}
 
-	return (void *)InitAesCtr(fr->decryptor.dataKey, fr->decryptor.dataKeyLength);
+	decryptor->crypt = InitAesCtr(decryptor->dataKey, decryptor->dataKeyLength);
+
+	if (decryptor->crypt == NULL)
+	{
+		return -1;
+	}
+
+	return 0;
 }
 
-void CloseCrypt(void *ctx)
+void CloseCrypt(fcgi_crypt * cryptor)
 {
-	if (!ctx)
+	if (!cryptor || !cryptor->crypt)
+	{
 		return;
+	}
 	
-	UninitAesCtr((EVP_CIPHER_CTX *)ctx);
+	UninitAesCtr((EVP_CIPHER_CTX *)cryptor->crypt);
 }
 
-#define BUFF_SIZE	1024
-
- /*******************************************************************************
+/*******************************************************************************
  * Encrypt any data by AES ctr encryption algorithm
  */
-void CryptDataStream(void *ctx, char *data, int offset, int len)
+void CryptDataStream(fcgi_crypt * cryptor, char *data, int offset, int len)
 {
 	int i;
 	int block_cnt, block_offset, block_size;
 	char *buff;
+	EVP_CIPHER_CTX *ctx;
 
 	// check parameters
-	if (!ctx || !data || ((offset+len) <= 0))
+	if (!cryptor || !data || ((offset+len) <= 0))
 		return;
 
-	buff = malloc(BUFF_SIZE);
-	memset(buff, 0, BUFF_SIZE);
+	ctx = (EVP_CIPHER_CTX *)cryptor->crypt;
 
-	block_cnt = offset/BUFF_SIZE;
+	buff = malloc(BUF_SIZE);
+	memset(buff, 0, BUF_SIZE);
+
+	block_cnt = offset/BUF_SIZE;
 	block_offset = 0;
-	block_size = BUFF_SIZE*block_cnt;
+	block_size = BUF_SIZE*block_cnt;
 	for (i=0; i<block_cnt; i++)
-		CryptAesCtr((EVP_CIPHER_CTX *)ctx, buff, BUFF_SIZE, buff);
+		CryptAesCtr(ctx, buff, BUF_SIZE, buff);
 	
 	block_cnt = 1;
-	block_offset = offset%BUFF_SIZE;
-	block_size = min(len, BUFF_SIZE-block_offset);
-	memset(buff, 0, BUFF_SIZE);
+	block_offset = offset%BUF_SIZE;
+	block_size = min(len, BUF_SIZE-block_offset);
+	memset(buff, 0, BUF_SIZE);
 	memcpy(&buff[block_offset], data, block_size);
-	CryptAesCtr((EVP_CIPHER_CTX *)ctx, buff, BUFF_SIZE, buff);
+	CryptAesCtr(ctx, buff, BUF_SIZE, buff);
 	memcpy(data, &buff[block_offset], block_size);
 
 	block_offset = block_size;
 	block_size = len - block_offset;
 	if (block_size > 0)
-		CryptAesCtr((EVP_CIPHER_CTX *)ctx, &data[block_offset], block_size, &data[block_offset]);
+		CryptAesCtr(ctx, &data[block_offset], block_size, &data[block_offset]);
 	
 	free(buff);
 

@@ -76,24 +76,26 @@ int memcache_set_timeout(const char *key, const char *value, unsigned int timeou
 	return rv;
 }
 
-char* memcache_get(const char *key)
+int memcache_get(const char *key, char *value)
 {
 	apr_status_t rv;
 	apr_size_t len;
 	char *result;
 
 	if (!Memcache || !key)
-		return NULL;
+		return -1;
 
 	rv = apr_memcache_getp(Memcache, MemcachePool, key, &result, &len, NULL);
 
 	if (rv == 0)
 	{
-		return result;
+		memcpy(value, result, len);
+		value[len] = 0;
+		return 0;
 	} 
 	else
 	{
-		return NULL;
+		return -1;
 	}
 }
 

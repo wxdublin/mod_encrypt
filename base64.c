@@ -11,7 +11,7 @@ void decodeblock(unsigned char in[], char *clrstr) {
   out[1] = in[1] << 4 | in[2] >> 2;
   out[2] = in[2] << 6 | in[3] >> 0;
   out[3] = '\0';
-  strncat(clrstr, out, sizeof(out));
+  strncat(clrstr, (const char*)out, sizeof(out));
 }
 
 void b64_decode(char *b64src, char *clrdst) {
@@ -49,7 +49,7 @@ void encodeblock( unsigned char in[], char b64str[], int len ) {
              ((in[2] & 0xc0) >> 6) ] : '=');
     out[3] = (unsigned char) (len > 2 ? b64[ in[2] & 0x3f ] : '=');
     out[4] = '\0';
-    strncat(b64str, out, sizeof(out));
+    strncat(b64str, (const char *)out, sizeof(out));
 }
 
 /* encode - base64 encode a stream, adding padding if needed */

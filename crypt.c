@@ -37,7 +37,7 @@ int InitEncrypt(fcgi_crypt * encryptor)
  			return -1;
 	}
 	
-	encryptor->crypt = InitAesCtr(encryptor->dataKey, encryptor->dataKeyLength);
+	encryptor->crypt = InitAesCtr((unsigned char *)encryptor->dataKey, encryptor->dataKeyLength);
 
 	if (encryptor->crypt == NULL)
 	{
@@ -60,7 +60,7 @@ int InitDecrypt(fcgi_crypt * decryptor)
  			return -1;
 	}
 
-	decryptor->crypt = InitAesCtr(decryptor->dataKey, decryptor->dataKeyLength);
+	decryptor->crypt = InitAesCtr((unsigned char *)decryptor->dataKey, decryptor->dataKeyLength);
 
 	if (decryptor->crypt == NULL)
 	{
@@ -87,7 +87,7 @@ void CryptDataStream(fcgi_crypt * cryptor, char *data, int offset, int len)
 {
 	int i;
 	int block_cnt, block_offset, block_size;
-	char *buff;
+	unsigned char *buff;
 	EVP_CIPHER_CTX *ctx;
 
 	// check parameters
@@ -116,7 +116,7 @@ void CryptDataStream(fcgi_crypt * cryptor, char *data, int offset, int len)
 	block_offset = block_size;
 	block_size = len - block_offset;
 	if (block_size > 0)
-		CryptAesCtr(ctx, &data[block_offset], block_size, &data[block_offset]);
+		CryptAesCtr(ctx, (unsigned char *)&data[block_offset], block_size, (unsigned char *)&data[block_offset]);
 	
 	free(buff);
 

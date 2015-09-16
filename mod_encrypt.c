@@ -777,10 +777,13 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 			ap_table_unset(r->err_headers_out, "Bulk_encrypt");
 			ap_table_unset(r->err_headers_out, "Obj_encrypt");
 
-			CloseCrypt(&fr->decryptor);
-			ret = InitDecrypt(&fr->decryptor);
-			if (ret < 0)
-				return ap_psprintf(r->pool, "could not retrieve old keys");
+			if (fcgi_decrypt == TRUE)
+			{
+				CloseCrypt(&fr->decryptor);
+				ret = InitDecrypt(&fr->decryptor);
+				if (ret < 0)
+					return ap_psprintf(r->pool, "could not retrieve old keys");
+			}
 		}
 		
 		if ((usermd) && (fcgi_decrypt == TRUE))
@@ -2763,14 +2766,23 @@ static int content_handler(request_rec *r)
 	}
 
 	/* Create thread for key management */
-	if (!Thread)
+	if (!Thread && (fcgi_encrypt || fcgi_decrypt))
 	{
 		apr_threadattr_t *thread_attr;
 		apr_status_t rv;
 
 		// Initialize memcache
 		memcache_destroy();
-		memcache_init(fcgi_memcached_server, fcgi_memcached_port);
+		ret = memcache_init(fcgi_memcached_server, fcgi_memcached_port);
+		if (ret < 0)
+		{
+			sprintf(logdata, "Could not init to memcached server");
+			log_message(ENCRYPT_LOG_ERROR, logdata);
+
+			ret = HTTP_FORBIDDEN;
+			goto HANDLER_EXIT;
+		}
+		
 
 		if (ThreadPool)
 		{
@@ -2789,10 +2801,18 @@ static int content_handler(request_rec *r)
 			sleep(3);
 #endif
 		}
+		else
+		{
+			sprintf(logdata, "Could not start key thread");
+			log_message(ENCRYPT_LOG_ERROR, logdata);
+
+			ret = HTTP_FORBIDDEN;
+			goto HANDLER_EXIT;
+		}
 	}
 
 	// if PUT, initialize encrypt
-	if (!strcasecmp(r->method, "PUT"))
+	if (!strcasecmp(r->method, "PUT") && fcgi_encrypt)
 	{
 		ret = InitEncrypt(&fr->encryptor);
 

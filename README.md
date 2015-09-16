@@ -36,13 +36,13 @@ This is the simple example how to use mod_encyrpt :
           FastCgiEncExternalServer /var/www/html/myFCGI -host 192.168.0.1:3000
           FastCgiEncEncrypt On
           FastCgiEncDecrypt On
-	  FastCgiEncAuthServer 52.25.196.147
-	  FastCgiEncMasterKeyServer 52.25.196.147
-	  FastCgiEncDataKeyServer 52.25.196.147
-	  FastCgiEncMemcachedServer 127.0.0.1:11211
-	  FastCgiEncUserName test_user
-	  FastCgiEncPassword test_password
-	  FastCgiEncLogpath /var/log/apache2/encrypt.log 3
+          FastCgiEncAuthServer 52.25.196.147
+          FastCgiEncMasterKeyServer 52.25.196.147
+          FastCgiEncDataKeyServer 52.25.196.147
+          FastCgiEncMemcachedServer 127.0.0.1:11211
+          FastCgiEncUserName test_user
+          FastCgiEncPassword test_password
+          FastCgiEncLogpath /var/log/apache2/encrypt.log 3
       </IfModule>
 
 myFCGI and host IP/Port should be changed in your case.  
@@ -50,14 +50,14 @@ You can test it using curl.
 $ curl -v -XPUT http://localhost/myFCGI --data-binary teststring  
 
 #### Directives for encyption
-##### FastCgiEncrypt
+##### FastCgiEncEncrypt
 Syntax: FastCgiEncEncrypt _On_ / _Off_  
 Default: FastCgiEncEncrypt On  
 Context: server config  
 
 Enable / Disable the feature of FastCGI encrypt.  
 
-##### FastCgiDecrypt
+##### FastCgiEncDecrypt
 Syntax: FastCgiEncDecrypt _On_ / _Off_  
 Default: FastCgiEncDecrypt On  
 Context: server config  

@@ -20,8 +20,7 @@
 #define CACHE_KEYNAME_ENCRYPTEDDATAKEY	"fcgi-data-encryptedkey"
 #define CACHE_KEYNAME_DATAKEY			"fcgi-data-key"
 
-//#define KEY_STORE_PERIOD		(7*24*3600)			// a week
-#define KEY_STORE_PERIOD		(1*1*60)			// a week
+#define KEY_STORE_PERIOD		(7*24*3600)			// a week
 
 int key_active_request(fcgi_crypt * fc);
 int key_old_request(fcgi_crypt * fc);

@@ -13,7 +13,6 @@ int memcache_init(const char *host_name, const int port_num)
 	apr_memcache_server_t *server;
 	apr_memcache_stats_t* stats;
 	char *result;
-	apr_uint32_t until = 600;
 
 	if ((host_name==NULL) || port_num < 1)
 		return -1;

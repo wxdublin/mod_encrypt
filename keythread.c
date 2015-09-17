@@ -562,68 +562,68 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 		memset(&fc, 0, sizeof(fcgi_crypt));
 
 		// Authentication Token
-		ret = memcache_get(CACHE_KEYNAME_AUTHTOKEN, fc.token);
-		if (ret < 0)
+		timeout = get_auth_token(fc.token);
+		if (timeout > 0)
 		{
-			// if not exist, get token
-			timeout = get_auth_token(fc.token);
-			if (timeout > 0)
-				memcache_set_timeout(CACHE_KEYNAME_AUTHTOKEN, fc.token, timeout);
-			else
+			memcache_set_timeout(CACHE_KEYNAME_AUTHTOKEN, fc.token, timeout);
+		}
+		else
+		{
+			ret = memcache_get(CACHE_KEYNAME_AUTHTOKEN, fc.token);
+			if (ret < 0)
 				goto KEY_ERROR;
 		}
 
 		// Master Key
-		ret = memcache_get(CACHE_KEYNAME_MAKSTERKEYID, fc.masterKeyId);
-		ret += memcache_get(CACHE_KEYNAME_MAKSTERKEY, fc.masterKey);
-		ret += memcache_get(CACHE_KEYNAME_IV, fc.initializationVector);
-		if (ret < 0)
+		timeout = get_master_key(fc.token, fc.masterKeyId, fc.masterKey, fc.initializationVector);
+		if (timeout > 0)
 		{
-			timeout = get_master_key(fc.token, fc.masterKeyId, fc.masterKey, fc.initializationVector);
-			if (timeout > 0)
-			{
-				memcache_set_timeout(CACHE_KEYNAME_MAKSTERKEYID, fc.masterKeyId, timeout);
-				memcache_set_timeout(CACHE_KEYNAME_MAKSTERKEY, fc.masterKey, timeout);
-				memcache_set_timeout(CACHE_KEYNAME_IV, fc.initializationVector, timeout);
-			}
-			else
+			memcache_set_timeout(CACHE_KEYNAME_MAKSTERKEYID, fc.masterKeyId, timeout);
+			memcache_set_timeout(CACHE_KEYNAME_MAKSTERKEY, fc.masterKey, timeout);
+			memcache_set_timeout(CACHE_KEYNAME_IV, fc.initializationVector, timeout);
+		}
+		else
+		{
+			ret = memcache_get(CACHE_KEYNAME_MAKSTERKEYID, fc.masterKeyId);
+			ret += memcache_get(CACHE_KEYNAME_MAKSTERKEY, fc.masterKey);
+			ret += memcache_get(CACHE_KEYNAME_IV, fc.initializationVector);
+			if (ret < 0)
 				goto KEY_ERROR;
 		}
 
 		// Data Key
-		ret = memcache_get(CACHE_KEYNAME_DATAKEYID, fc.dataKeyId);
-		ret += memcache_get(CACHE_KEYNAME_ENCRYPTEDDATAKEY, fc.encryptedDataKey);
-		ret += memcache_get(CACHE_KEYNAME_DATAKEY, fc.dataKey);
-		if (ret < 0)
+		timeout = get_data_key(fc.token, fc.masterKeyId, fc.dataKeyId, fc.encryptedDataKey);
+		if (timeout > 0)
 		{
-			timeout = get_data_key(fc.token, fc.masterKeyId, fc.dataKeyId, fc.encryptedDataKey);
-			if (timeout > 0)
-			{
-				memcache_set_timeout(CACHE_KEYNAME_DATAKEYID, fc.dataKeyId, timeout);
-				memcache_set_timeout(CACHE_KEYNAME_ENCRYPTEDDATAKEY, fc.encryptedDataKey, timeout);
-			}
-			else
-				goto KEY_ERROR;
- 			ret = key_calculate_real(&fc);
-			if (ret == 0)
-			{
-				char dataKeyCacheName[KEY_SIZE];
-				memset(dataKeyCacheName, 0, KEY_SIZE);
-				sprintf(dataKeyCacheName, "fastcgi-%s-%s-%s", fc.masterKeyId, fc.dataKeyId, fcgi_username);
-				memcache_set_timeout(dataKeyCacheName, fc.dataKey, KEY_STORE_PERIOD);
-				memcache_set_timeout(CACHE_KEYNAME_DATAKEY, fc.dataKey, timeout);
-			}
-			else
+			memcache_set_timeout(CACHE_KEYNAME_DATAKEYID, fc.dataKeyId, timeout);
+			memcache_set_timeout(CACHE_KEYNAME_ENCRYPTEDDATAKEY, fc.encryptedDataKey, timeout);
+		}
+		else
+		{
+			ret = memcache_get(CACHE_KEYNAME_DATAKEYID, fc.dataKeyId);
+			ret += memcache_get(CACHE_KEYNAME_ENCRYPTEDDATAKEY, fc.encryptedDataKey);
+			ret += memcache_get(CACHE_KEYNAME_DATAKEY, fc.dataKey);
+			if (ret < 0)
 				goto KEY_ERROR;
 		}
+
+		// calculate the real key
+		ret = key_calculate_real(&fc);
+		if (ret == 0)
+		{
+			char dataKeyCacheName[KEY_SIZE];
+			memset(dataKeyCacheName, 0, KEY_SIZE);
+			sprintf(dataKeyCacheName, "fastcgi-%s-%s-%s", fc.masterKeyId, fc.dataKeyId, fcgi_username);
+			memcache_set_timeout(dataKeyCacheName, fc.dataKey, KEY_STORE_PERIOD);
+
+			if (timeout <= 0)
+				timeout = KEY_STORE_PERIOD;
+			memcache_set_timeout(CACHE_KEYNAME_DATAKEY, fc.dataKey, timeout);
+		}
+		else
+			goto KEY_ERROR;
 
 KEY_ERROR:
-		if (timeout < 0)
-		{
-			// This is error, so delete all keys in memcache
-			memcache_delete(CACHE_KEYNAME_AUTHTOKEN);
-		}
-
 #ifdef WIN32
 		Sleep(30000);
 #else

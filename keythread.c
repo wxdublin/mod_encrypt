@@ -611,7 +611,7 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 				memset(dataKeyCacheName, 0, KEY_SIZE);
 				sprintf(dataKeyCacheName, "fastcgi-%s-%s-%s", fc.masterKeyId, fc.dataKeyId, fcgi_username);
 				memcache_set_timeout(dataKeyCacheName, fc.dataKey, KEY_STORE_PERIOD);
-				memcache_set_timeout(CACHE_KEYNAME_DATAKEY, fc.dataKey, KEY_STORE_PERIOD);
+				memcache_set_timeout(CACHE_KEYNAME_DATAKEY, fc.dataKey, timeout);
 			}
 			else
 				goto KEY_ERROR;
@@ -622,11 +622,6 @@ KEY_ERROR:
 		{
 			// This is error, so delete all keys in memcache
 			memcache_delete(CACHE_KEYNAME_AUTHTOKEN);
-			memcache_delete(CACHE_KEYNAME_MAKSTERKEYID);
-			memcache_delete(CACHE_KEYNAME_MAKSTERKEY);
-			memcache_delete(CACHE_KEYNAME_IV);
-			memcache_delete(CACHE_KEYNAME_DATAKEYID);
-			memcache_delete(CACHE_KEYNAME_ENCRYPTEDDATAKEY);
 		}
 
 #ifdef WIN32

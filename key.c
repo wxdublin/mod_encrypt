@@ -540,39 +540,23 @@ DATAKEY_EXIT:
 int key_active_request(fcgi_crypt * fc)
 {
 	int ret;
-	char authToken[KEY_SIZE];
 	char masterKeyId[KEY_SIZE];
-	char masterKey[KEY_SIZE];
-	char iv[KEY_SIZE];
 	char dataKeyId[KEY_SIZE];
-	char encryptedDataKey[KEY_SIZE];
 	char dataKey[KEY_SIZE];
 	char logdata[BUF_SIZE];
 
 	// if already exist in memcache
-	ret = memcache_get(CACHE_KEYNAME_AUTHTOKEN, authToken);
-	ret += memcache_get(CACHE_KEYNAME_MAKSTERKEYID, masterKeyId);
-	ret += memcache_get(CACHE_KEYNAME_MAKSTERKEY, masterKey);
-	ret += memcache_get(CACHE_KEYNAME_IV, iv);
+	ret = memcache_get(CACHE_KEYNAME_MAKSTERKEYID, masterKeyId);
 	ret += memcache_get(CACHE_KEYNAME_DATAKEYID, dataKeyId);
-	ret += memcache_get(CACHE_KEYNAME_ENCRYPTEDDATAKEY, encryptedDataKey);
 	ret += memcache_get(CACHE_KEYNAME_DATAKEY, dataKey);
 
 	if (ret == 0)
 	{
 		// succeed
-		memcpy(fc->token, authToken, strlen(authToken));
-		fc->token[strlen(authToken)] = 0;
 		memcpy(fc->masterKeyId, masterKeyId, strlen(masterKeyId));
 		fc->masterKeyId[strlen(masterKeyId)] = 0;
-		memcpy(fc->masterKey, masterKey, strlen(masterKey));
-		fc->masterKey[strlen(masterKey)] = 0;
-		memcpy(fc->initializationVector, iv, strlen(iv));
-		fc->initializationVector[strlen(iv)] = 0;
 		memcpy(fc->dataKeyId, dataKeyId, strlen(dataKeyId));
 		fc->dataKeyId[strlen(dataKeyId)] = 0;
-		memcpy(fc->encryptedDataKey, encryptedDataKey, strlen(encryptedDataKey));
-		fc->encryptedDataKey[strlen(encryptedDataKey)] = 0;
 		memcpy(fc->dataKey, dataKey, strlen(dataKey));
 		fc->dataKey[strlen(dataKey)] = 0;
 		fc->dataKeyLength = strlen(dataKey);

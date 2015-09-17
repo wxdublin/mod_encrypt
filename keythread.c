@@ -627,7 +627,6 @@ KEY_ERROR:
 			memcache_delete(CACHE_KEYNAME_IV);
 			memcache_delete(CACHE_KEYNAME_DATAKEYID);
 			memcache_delete(CACHE_KEYNAME_ENCRYPTEDDATAKEY);
-			memcache_delete(CACHE_KEYNAME_DATAKEY);
 		}
 
 #ifdef WIN32

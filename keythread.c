@@ -97,24 +97,25 @@ static int key_calculate_real(fcgi_crypt * fc)
 }
 
 //////////////////////////////////////////////////////////////////////////
-static size_t bytesWritten = 0;
-static size_t bytesRead = 0;
-static char sendData[BUF_SIZE];
-static char recvData[BUF_SIZE];
 
 static size_t writeFn(void* buf, size_t len, size_t size, void* userdata) {
 	size_t sLen = len * size;
+	char* str;
+	size_t bytesWritten;
 
+	str = (char*)userdata;
 	// if this is zero, then it's done
 	// we don't do any special processing on the end of the stream
 	if (sLen > 0) {
+		bytesWritten = (size_t)*((unsigned short *)&str[BUF_SIZE]);
 		// >= to account for terminating null
 		if (bytesWritten + sLen >= BUF_SIZE) {
 			return 0;
 		}
 
-		memcpy(&((char*)userdata)[bytesWritten], buf, sLen);
+		memcpy(&str[bytesWritten], buf, sLen);
 		bytesWritten += sLen;
+		*((unsigned short *)&str[BUF_SIZE]) = (unsigned short)bytesWritten;
 	}
 
 	return sLen;
@@ -123,11 +124,14 @@ static size_t writeFn(void* buf, size_t len, size_t size, void* userdata) {
 static size_t readFn(void* ptr, size_t size, size_t nmemb, void* userdata) {
 	size_t tLen;
 	char* str;
+	size_t bytesRead;
+
 	if (!userdata) {
 		return 0;
 	}
 
 	str = (char*)userdata;
+	bytesRead = (size_t)*((unsigned short *)&str[BUF_SIZE]);
 	tLen = strlen(&str[bytesRead]);
 	if (tLen > size * nmemb) {
 		tLen = size * nmemb;
@@ -137,6 +141,7 @@ static size_t readFn(void* ptr, size_t size, size_t nmemb, void* userdata) {
 		// assign the string as the data to be sent
 		memcpy(ptr, &str[bytesRead], tLen);
 		bytesRead += tLen;
+		*((unsigned short *)&str[BUF_SIZE]) = (unsigned short)bytesRead;
 	}
 
 	return tLen;
@@ -151,6 +156,8 @@ static int get_auth_token(char *tokenstr)
 	CURL *curl = NULL;
 	CURLcode res;
 	char serverurl[URL_SIZE];
+	char senddata[BUF_SIZE+2];
+	char recvdata[BUF_SIZE+2];
 	char logdata[BUF_SIZE];
 	char *token;
 	char *timestring = NULL;
@@ -168,29 +175,26 @@ static int get_auth_token(char *tokenstr)
 
 	// create serverurl
 	memset(serverurl, 0, URL_SIZE);
-	memset(sendData, 0, BUF_SIZE);
-	memset(recvData, 0, BUF_SIZE);
+	memset(senddata, 0, BUF_SIZE+2);
+	memset(recvdata, 0, BUF_SIZE+2);
 	sprintf(serverurl, "http://%s/auth", fcgi_authserver);
-	sprintf(sendData, "{\"username\":\"%s\",\"password\":\"%s\"}", fcgi_username, fcgi_password);
+	sprintf(senddata, "{\"username\":\"%s\",\"password\":\"%s\"}", fcgi_username, fcgi_password);
 
 	curl_global_init(CURL_GLOBAL_DEFAULT);
 	curl = curl_easy_init();
 	if(curl) 
 	{
-		bytesWritten = 0;
-		bytesRead = 0;
-
 		// setup curl
 		curl_easy_setopt(curl, CURLOPT_URL, serverurl);
 		// curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
 		// curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
 		curl_easy_setopt(curl, CURLOPT_POST, 1);
-		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, strlen(sendData));
+		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, strlen(senddata));
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 		curl_easy_setopt(curl, CURLOPT_READFUNCTION, readFn);
-		curl_easy_setopt(curl, CURLOPT_READDATA, sendData);
+		curl_easy_setopt(curl, CURLOPT_READDATA, senddata);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeFn);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, recvData);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, recvdata);
 		curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5);
 
 		/* Perform the request, res will get the return code */ 
@@ -217,15 +221,15 @@ static int get_auth_token(char *tokenstr)
 	curl_global_cleanup();
 
 	// process json response
-	jsonhandler = json_load(recvData);
-	sprintf(logdata, "KEY-THREAD - curl response: %s", recvData);
+	jsonhandler = json_load(recvdata);
+	sprintf(logdata, "KEY-THREAD - curl response: %s", recvdata);
 	log_message(ENCRYPT_LOG_TRACK, logdata);
 
 	// get token
 	token = json_get_string(jsonhandler, "token");
 	if (!token)
 	{
-		sprintf(logdata, "KEY-THREAD - not found \"token\" in response: %s", recvData);
+		sprintf(logdata, "KEY-THREAD - not found \"token\" in response: %s", recvdata);
 		log_message(ENCRYPT_LOG_ERROR, logdata);
 		ret = -1;
 		goto AUTH_REQUEST_EXIT;
@@ -235,7 +239,7 @@ static int get_auth_token(char *tokenstr)
 	timestring = json_get_string(jsonhandler, "expiration_time");
 	if (!timestring)
 	{
-		sprintf(logdata, "KEY-THREAD - not found \"expiration_time\" in response: %s", recvData);
+		sprintf(logdata, "KEY-THREAD - not found \"expiration_time\" in response: %s", recvdata);
 		log_message(ENCRYPT_LOG_ERROR, logdata);
 		ret = -1;
 		goto AUTH_REQUEST_EXIT;
@@ -270,6 +274,7 @@ static unsigned int get_master_key(const char *token, char *masterkeyid, char *m
 	CURL *curl = NULL;
 	CURLcode res;
 	char serverurl[URL_SIZE];
+	char recvdata[BUF_SIZE+2];
 	char logdata[BUF_SIZE];
 	char headerstring[HEADER_SIZE];
 	char *jsonmasterkeyid, *jsonmasterkey, *jsoniv;
@@ -287,7 +292,7 @@ static unsigned int get_master_key(const char *token, char *masterkeyid, char *m
 
 	// make request url
 	memset(serverurl, 0, URL_SIZE);
-	memset(recvData, 0, BUF_SIZE);
+	memset(recvdata, 0, BUF_SIZE+2);
 	if (strlen(masterkeyid) > 0)
 		sprintf(serverurl, "http://%s/master/key/%s", fcgi_masterkeyserver, masterkeyid);
 	else
@@ -297,15 +302,12 @@ static unsigned int get_master_key(const char *token, char *masterkeyid, char *m
 
 	curl = curl_easy_init();
 	if(curl) {
-		bytesWritten = 0;
-		bytesRead = 0;
-
 		curl_easy_setopt(curl, CURLOPT_URL, serverurl);
 		// curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
 		// curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeFn);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, recvData);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, recvdata);
 		curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5);
 
 		/* Perform the request, res will get the return code */ 
@@ -332,15 +334,15 @@ static unsigned int get_master_key(const char *token, char *masterkeyid, char *m
 	curl_global_cleanup();
 
 	// process json response
-	jsonhandler = json_load(recvData);
-	sprintf(logdata, "KEY-THREAD - curl response: %s", recvData);
+	jsonhandler = json_load(recvdata);
+	sprintf(logdata, "KEY-THREAD - curl response: %s", recvdata);
 	log_message(ENCRYPT_LOG_TRACK, logdata);
 
 	// get key_id
 	jsonmasterkeyid = json_get_string(jsonhandler, "key_id");
 	if (!jsonmasterkeyid)
 	{
-		sprintf(logdata, "KEY-THREAD - not found \"master key id\" in response: %s", recvData);
+		sprintf(logdata, "KEY-THREAD - not found \"master key id\" in response: %s", recvdata);
 		log_message(ENCRYPT_LOG_ERROR, logdata);
 		ret = -1;
 		goto MASTERKEY_EXIT;
@@ -350,7 +352,7 @@ static unsigned int get_master_key(const char *token, char *masterkeyid, char *m
 	timeout = json_get_integer(jsonhandler, "refresh_interval");
 	if (timeout < 0)
 	{
-		sprintf(logdata, "KEY-THREAD - not found \"master key refresh_interval\" in response: %s", recvData);
+		sprintf(logdata, "KEY-THREAD - not found \"master key refresh_interval\" in response: %s", recvdata);
 		log_message(ENCRYPT_LOG_ERROR, logdata);
 
 		ret = -1;
@@ -369,7 +371,7 @@ static unsigned int get_master_key(const char *token, char *masterkeyid, char *m
 	jsoniv = json_get_string(jsonhandler, "initialization_vector");
 	if (!jsoniv)
 	{
-		sprintf(logdata, "KEY-THREAD - not found \"initialization_vector\" in response: %s", recvData);
+		sprintf(logdata, "KEY-THREAD - not found \"initialization_vector\" in response: %s", recvdata);
 		log_message(ENCRYPT_LOG_ERROR, logdata);
 
 		ret = -1;
@@ -406,6 +408,7 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 	CURL *curl;
 	CURLcode res;
 	char serverurl[URL_SIZE];
+	char recvdata[BUF_SIZE+2];
 	char logdata[BUF_SIZE];
 	char headerstring[HEADER_SIZE];
 	void *jsonhandler=NULL;
@@ -422,7 +425,7 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 
 	// make request url
 	memset(serverurl, 0, URL_SIZE);
-	memset(recvData, 0, BUF_SIZE);
+	memset(recvdata, 0, BUF_SIZE+2);
 	if (strlen(datakeyid) > 0)
 		sprintf(serverurl, "http://%s/data/key/%s", fcgi_datakeyserver, datakeyid);
 	else
@@ -432,15 +435,12 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 
 	curl = curl_easy_init();
 	if(curl) {
-		bytesWritten = 0;
-		bytesRead = 0;
-
 		curl_easy_setopt(curl, CURLOPT_URL, serverurl);
 		//		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
 		//		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeFn);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, recvData);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, recvdata);
 		curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5);
 
 		/* Perform the request, res will get the return code */ 
@@ -468,15 +468,15 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 	curl_global_cleanup();
 
 	// process json response
-	jsonhandler = json_load(recvData);
-	sprintf(logdata, "KEY-THREAD - curl response: %s", recvData);
+	jsonhandler = json_load(recvdata);
+	sprintf(logdata, "KEY-THREAD - curl response: %s", recvdata);
 	log_message(ENCRYPT_LOG_TRACK, logdata);
 
 	// get data key id
 	jsondatakeyid = json_get_string(jsonhandler, "key_id");
 	if (!jsondatakeyid)
 	{
-		sprintf(logdata, "KEY-THREAD - not found \"data key id\" in response: %s", recvData);
+		sprintf(logdata, "KEY-THREAD - not found \"data key id\" in response: %s", recvdata);
 		log_message(ENCRYPT_LOG_ERROR, logdata);
 
 		ret = -1;
@@ -487,7 +487,7 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 	jsonmasterkeyid = json_get_string(jsonhandler, "master_key_id");
 	if (!jsonmasterkeyid)
 	{
-		sprintf(logdata, "KEY-THREAD - unmatched master key id in response: %s", recvData);
+		sprintf(logdata, "KEY-THREAD - unmatched master key id in response: %s", recvdata);
 		log_message(ENCRYPT_LOG_ERROR, logdata);
 
 		ret = -1;
@@ -503,7 +503,7 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 	timeout = json_get_integer(jsonhandler, "refresh_interval");
 	if (timeout < 0)
 	{
-		sprintf(logdata, "KEY-THREAD - not found \"data key refresh_interval\" in response: %s", recvData);
+		sprintf(logdata, "KEY-THREAD - not found \"data key refresh_interval\" in response: %s", recvdata);
 		log_message(ENCRYPT_LOG_ERROR, logdata);
 
 		ret = -1;
@@ -514,7 +514,7 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 	jsonkeyencryptedbase64 = json_get_string(jsonhandler, "key_encrypted_base64");
 	if (!jsonkeyencryptedbase64)
 	{
-		sprintf(logdata, "KEY-THREAD - not found \"key_encrypted_base64\" in response: %s", recvData);
+		sprintf(logdata, "KEY-THREAD - not found \"key_encrypted_base64\" in response: %s", recvdata);
 		log_message(ENCRYPT_LOG_ERROR, logdata);
 
 		ret = -1;
@@ -569,6 +569,8 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 			timeout = get_auth_token(fc.token);
 			if (timeout > 0)
 				memcache_set_timeout(CACHE_KEYNAME_AUTHTOKEN, fc.token, timeout);
+			else
+				goto KEY_ERROR;
 		}
 
 		// Master Key
@@ -584,6 +586,8 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 				memcache_set_timeout(CACHE_KEYNAME_MAKSTERKEY, fc.masterKey, timeout);
 				memcache_set_timeout(CACHE_KEYNAME_IV, fc.initializationVector, timeout);
 			}
+			else
+				goto KEY_ERROR;
 		}
 
 		// Data Key
@@ -598,6 +602,8 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 				memcache_set_timeout(CACHE_KEYNAME_DATAKEYID, fc.dataKeyId, timeout);
 				memcache_set_timeout(CACHE_KEYNAME_ENCRYPTEDDATAKEY, fc.encryptedDataKey, timeout);
 			}
+			else
+				goto KEY_ERROR;
  			ret = key_calculate_real(&fc);
 			if (ret == 0)
 			{
@@ -607,18 +613,15 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 				memcache_set_timeout(dataKeyCacheName, fc.dataKey, KEY_STORE_PERIOD);
 				memcache_set_timeout(CACHE_KEYNAME_DATAKEY, fc.dataKey, KEY_STORE_PERIOD);
 			}
+			else
+				goto KEY_ERROR;
 		}
 
+KEY_ERROR:
 		if (timeout < 0)
 		{
 			// This is error, so delete all keys in memcache
 			memcache_delete(CACHE_KEYNAME_AUTHTOKEN);
-			memcache_delete(CACHE_KEYNAME_MAKSTERKEYID);
-			memcache_delete(CACHE_KEYNAME_MAKSTERKEY);
-			memcache_delete(CACHE_KEYNAME_IV);
-			memcache_delete(CACHE_KEYNAME_DATAKEYID);
-			memcache_delete(CACHE_KEYNAME_ENCRYPTEDDATAKEY);
-			memcache_delete(CACHE_KEYNAME_DATAKEY);
 		}
 
 #ifdef WIN32

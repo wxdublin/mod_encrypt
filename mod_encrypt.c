@@ -2779,7 +2779,7 @@ static int content_handler(request_rec *r)
 			sprintf(logdata, "Could not init to memcached server");
 			log_message(ENCRYPT_LOG_ERROR, logdata);
 
-			ret = HTTP_FORBIDDEN;
+			ret = HTTP_SERVICE_UNAVAILABLE;
 			goto HANDLER_EXIT;
 		}
 		
@@ -2801,7 +2801,7 @@ static int content_handler(request_rec *r)
 			sprintf(logdata, "Could not start key thread, please check parameters and server addresses");
 			log_message(ENCRYPT_LOG_ERROR, logdata);
 
-			ret = HTTP_FORBIDDEN;
+			ret = HTTP_SERVICE_UNAVAILABLE;
 			goto HANDLER_EXIT;
 		}
 	}
@@ -2813,7 +2813,7 @@ static int content_handler(request_rec *r)
 
 		if (ret < 0)
 		{
-			ret = HTTP_FORBIDDEN;
+			ret = HTTP_SERVICE_UNAVAILABLE;
 			goto HANDLER_EXIT;
 		}
 	}

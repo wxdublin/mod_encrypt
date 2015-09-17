@@ -103,7 +103,7 @@ int memcache_delete(const char *key)
 	apr_status_t rv;
 	if (!Memcache || !key)
 		return -1;
-	rv = apr_memcache_delete(Memcache, key, 100);
+	rv = apr_memcache_delete(Memcache, key, 0);
 
 	return rv;
 }

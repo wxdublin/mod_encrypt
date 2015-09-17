@@ -267,7 +267,7 @@ AUTH_REQUEST_EXIT:
 /**
  * Get Master Key from server
  */
-static unsigned int get_master_key(const char *token, char *masterkeyid, char *masterkey, char *iv)
+static int get_master_key(const char *token, char *masterkeyid, char *masterkey, char *iv)
 {
 	int ret;
 	int timeout;
@@ -622,6 +622,12 @@ KEY_ERROR:
 		{
 			// This is error, so delete all keys in memcache
 			memcache_delete(CACHE_KEYNAME_AUTHTOKEN);
+			memcache_delete(CACHE_KEYNAME_MAKSTERKEYID);
+			memcache_delete(CACHE_KEYNAME_MAKSTERKEY);
+			memcache_delete(CACHE_KEYNAME_IV);
+			memcache_delete(CACHE_KEYNAME_DATAKEYID);
+			memcache_delete(CACHE_KEYNAME_ENCRYPTEDDATAKEY);
+			memcache_delete(CACHE_KEYNAME_DATAKEY);
 		}
 
 #ifdef WIN32
@@ -648,7 +654,7 @@ void key_thread_init(void)
 	// check parameters
 	if (!fcgi_username || !fcgi_password || !fcgi_authserver || !fcgi_masterkeyserver || !fcgi_datakeyserver)
 	{
-		return;
+		goto KEYINIT_EXIT;
 	}
 
 	timeout = 0;
@@ -662,6 +668,10 @@ void key_thread_init(void)
 	{
 		memcache_set_timeout(CACHE_KEYNAME_AUTHTOKEN, fc.token, timeout);
 	}
+	else
+	{
+		goto KEYINIT_EXIT;
+	}
 
 	timeout = get_master_key(fc.token, fc.masterKeyId, fc.masterKey, fc.initializationVector);
 	if (timeout > 0)
@@ -670,6 +680,10 @@ void key_thread_init(void)
 		memcache_set_timeout(CACHE_KEYNAME_MAKSTERKEY, fc.masterKey, timeout);
 		memcache_set_timeout(CACHE_KEYNAME_IV, fc.initializationVector, timeout);
 	}
+	else
+	{
+		goto KEYINIT_EXIT;
+	}
 
 	// Data Key
 	timeout = get_data_key(fc.token, fc.masterKeyId, fc.dataKeyId, fc.encryptedDataKey);
@@ -677,6 +691,10 @@ void key_thread_init(void)
 	{
 		memcache_set_timeout(CACHE_KEYNAME_DATAKEYID, fc.dataKeyId, timeout);
 		memcache_set_timeout(CACHE_KEYNAME_ENCRYPTEDDATAKEY, fc.encryptedDataKey, timeout);
+	}
+	else
+	{
+		goto KEYINIT_EXIT;
 	}
  
 	ret = key_calculate_real(&fc);
@@ -688,7 +706,12 @@ void key_thread_init(void)
 		memcache_set_timeout(dataKeyCacheName, fc.dataKey, KEY_STORE_PERIOD);
 		memcache_set_timeout(CACHE_KEYNAME_DATAKEY, fc.dataKey, KEY_STORE_PERIOD);
 	}
+	else
+	{
+		goto KEYINIT_EXIT;
+	}
 
+KEYINIT_EXIT:
 	if (timeout < 0)
 	{
 		// This is error, so delete all keys in memcache

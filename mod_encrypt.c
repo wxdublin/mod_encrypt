@@ -316,6 +316,7 @@ static apcb_t init_module(server_rec *s, pool *p)
 
         apr_pool_note_subprocess(p, proc, APR_KILL_ONLY_ONCE);
     }
+
 #else /* !APACHE2 */
 
     fcgi_pm_pid = ap_spawn_child(p, fcgi_pm_main, NULL, kill_only_once, NULL, NULL, NULL);
@@ -326,7 +327,50 @@ static apcb_t init_module(server_rec *s, pool *p)
 
 #endif /* !APACHE2 */
 
-    close(fcgi_pm_pipe[0]);
+	close(fcgi_pm_pipe[0]);
+
+	/* Initialize Memcache and Key Thread */
+
+	{
+		int ret;
+		char logdata[1024];
+
+		// Initialize memcache
+		ret = memcache_init(fcgi_memcached_server, fcgi_memcached_port);
+		if (ret < 0)
+		{
+			sprintf(logdata, "Could not init to memcached server");
+			log_message(ENCRYPT_LOG_ERROR, logdata);
+		}
+		else if (ret == 1)
+		{
+			sprintf(logdata, "Already inited server");
+			log_message(ENCRYPT_LOG_INFO, logdata);
+		}
+		else
+		{
+			sprintf(logdata, "Inited memcached server");
+			log_message(ENCRYPT_LOG_INFO, logdata);
+		}
+
+		// init key thread
+		ret = key_thread_init();
+		if (ret < 0)
+		{
+			sprintf(logdata, "Could not start key thread, please check parameters and server addresses");
+			log_message(ENCRYPT_LOG_ERROR, logdata);
+		}
+		else if (ret == 1)
+		{
+			sprintf(logdata, "Already started server");
+			log_message(ENCRYPT_LOG_INFO, logdata);
+		}
+		else
+		{
+			sprintf(logdata, "Started key thread");
+			log_message(ENCRYPT_LOG_INFO, logdata);
+		}
+	}
 
 #endif /* !WIN32 */
 
@@ -356,8 +400,6 @@ static void fcgi_child_init(apr_pool_t * p, server_rec * dc)
 static void fcgi_child_init(server_rec *dc, pool *p)
 #endif
 {
-	int ret;
-	char logdata[BUF_SIZE];
 #ifdef WIN32
     /* Create the MBOX, TERM, and WAKE event handlers */
     fcgi_event_handles[0] = CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -390,35 +432,53 @@ static void fcgi_child_init(server_rec *dc, pool *p)
             "_beginthread() failed to spawn the process manager");
     }
 
+	/* Initialize Memcache and Key Thread */
+
+	{
+		int ret;
+		char logdata[1024];
+
+		// Initialize memcache
+		ret = memcache_init(fcgi_memcached_server, fcgi_memcached_port);
+		if (ret < 0)
+		{
+			sprintf(logdata, "Could not init to memcached server");
+			log_message(ENCRYPT_LOG_ERROR, logdata);
+		}
+		else if (ret == 1)
+		{
+			sprintf(logdata, "Already inited server");
+			log_message(ENCRYPT_LOG_INFO, logdata);
+		}
+		else
+		{
+			sprintf(logdata, "Inited memcached server");
+			log_message(ENCRYPT_LOG_INFO, logdata);
+		}
+
+		// init key thread
+		ret = key_thread_init();
+		if (ret < 0)
+		{
+			sprintf(logdata, "Could not start key thread, please check parameters and server addresses");
+			log_message(ENCRYPT_LOG_ERROR, logdata);
+		}
+		else if (ret == 1)
+		{
+			sprintf(logdata, "Already started server");
+			log_message(ENCRYPT_LOG_INFO, logdata);
+		}
+		else
+		{
+			sprintf(logdata, "Started key thread");
+			log_message(ENCRYPT_LOG_INFO, logdata);
+		}
+	}
+
 #ifdef APACHE2
     apr_pool_cleanup_register(p, NULL, fcgi_child_exit, fcgi_child_exit);
 #endif
 #endif
-	// Initialize memcache
-	ret = memcache_init(fcgi_memcached_server, fcgi_memcached_port);
-	if (ret < 0)
-	{
-		sprintf(logdata, "Could not init to memcached server");
-		log_message(ENCRYPT_LOG_ERROR, logdata);
-	}
-	else
-	{
-		sprintf(logdata, "Inited memcached server");
-		log_message(ENCRYPT_LOG_INFO, logdata);
-	}
-
-	// init key thread
-	ret = key_thread_init();
-	if (ret < 0)
-	{
-		sprintf(logdata, "Could not start key thread, please check parameters and server addresses");
-		log_message(ENCRYPT_LOG_ERROR, logdata);
-	}
-	else
-	{
-		sprintf(logdata, "Started key thread");
-		log_message(ENCRYPT_LOG_INFO, logdata);
-	}
 }
 
 /*
@@ -2788,19 +2848,6 @@ static int content_handler(request_rec *r)
 		ret = HTTP_FORBIDDEN;
 		goto HANDLER_EXIT;
 	}
-
-	// if PUT, initialize encrypt
-	if (!strcasecmp(r->method, "PUT") && fcgi_encrypt)
-	{
-		ret = InitEncrypt(&fr->encryptor);
-
-		if (ret < 0)
-		{
-			ret = HTTP_SERVICE_UNAVAILABLE;
-			goto HANDLER_EXIT;
-		}
-	}
-	
 
 	/* Process the encrypt-script request */
 	if ((ret = do_work(r, fr)) != OK)

@@ -642,7 +642,7 @@ KEY_ERROR:
 
 static apr_pool_t *ThreadPool = NULL;
 static apr_thread_t *Thread = NULL;
-
+volatile int KeyThreadInitedFlag = 0;
 int key_thread_init(void)
 {
 	int ret;
@@ -650,6 +650,14 @@ int key_thread_init(void)
 	int timeout;
 	apr_threadattr_t *thread_attr;
 	apr_status_t rv;
+	
+	char logdata[BUF_SIZE];
+	sprintf(logdata, "KeyThreadInitedFlag = %d", KeyThreadInitedFlag);
+	log_message(ENCRYPT_LOG_TRACK, logdata);
+
+	if (KeyThreadInitedFlag != 0)
+		return 1;
+	KeyThreadInitedFlag = 1;
 
 	// check parameters
 	if (!fcgi_username || !fcgi_password || !fcgi_authserver || !fcgi_masterkeyserver || !fcgi_datakeyserver)

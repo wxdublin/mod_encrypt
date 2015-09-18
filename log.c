@@ -68,6 +68,8 @@ void log_message(int log_level, char *log_message)
 		goto done;  
 	}
 
+	apr_file_perms_set(fcgi_logpath, 0x666);
+
 	len = strlen(buffer);
 	rv = apr_file_write(dest_fp, buffer, &len);  
 	if (rv != APR_SUCCESS) {  

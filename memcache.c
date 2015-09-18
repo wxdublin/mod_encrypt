@@ -3,9 +3,11 @@
 #include "apr_memcache.h"
 #include "memcache.h"
 #include "fcgi.h"
+#include "log.h"
 
 static apr_pool_t *MemcachePool = NULL;
 static apr_memcache_t *Memcache = NULL;
+volatile int MemcacheInitedFlag = 0;
 #define UNTIL	3600
 int memcache_init(const char *host_name, const int port_num)
 {
@@ -13,6 +15,14 @@ int memcache_init(const char *host_name, const int port_num)
 	apr_memcache_server_t *server;
 	apr_memcache_stats_t* stats;
 	char *result;
+
+	char logdata[1024];
+	sprintf(logdata, "MemcacheInitedFlag = %d, MemcachePool = %x, Memcache = %x", MemcacheInitedFlag, MemcachePool, Memcache);
+	log_message(ENCRYPT_LOG_TRACK, logdata);
+
+	if (MemcacheInitedFlag != 0)
+		return 1;
+	MemcacheInitedFlag = 1;
 
 	if ((host_name==NULL) || port_num < 1)
 		goto MEMCACHE_INIT_EXIT;

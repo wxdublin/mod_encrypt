@@ -745,7 +745,7 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 		char *usermd = (char *)ap_table_get(r->err_headers_out, "X-Scal-Usermd");
 
 		// logging
-		sprintf(logdata, "received metadata, bulk_encrypt:%s, obj_encrypt:%s", bulk_encrypt, obj_encrypt);
+		sprintf(logdata, "received metadata, bulk_encrypt:%s, obj_encrypt:%s", bulk_encrypt?bulk_encrypt:"null", obj_encrypt?obj_encrypt:"null");
 		log_message(ENCRYPT_LOG_TRACK, logdata);
 
 		// get masterkeyid, datakeyid, iv

@@ -325,7 +325,7 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
         ++env->envp;
     }
 
-	if ((fcgi_encrypt == TRUE) && fr->encryptor.masterKeyId &&
+	if (!strcasecmp(r->method, "PUT") && (fcgi_encrypt == TRUE) && fr->encryptor.masterKeyId &&
 		fr->encryptor.dataKeyId && fr->encryptor.initializationVector)
 	{
 		char bulkvalue[512];

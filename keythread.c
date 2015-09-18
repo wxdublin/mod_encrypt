@@ -642,90 +642,20 @@ KEY_ERROR:
 
 static apr_pool_t *ThreadPool = NULL;
 static apr_thread_t *Thread = NULL;
-volatile int KeyThreadInitedFlag = 0;
 int key_thread_init(void)
 {
 	int ret;
-	fcgi_crypt fc;
-	int timeout;
 	apr_threadattr_t *thread_attr;
 	apr_status_t rv;
-	
-	char logdata[BUF_SIZE];
-	sprintf(logdata, "KeyThreadInitedFlag = %d", KeyThreadInitedFlag);
-	log_message(ENCRYPT_LOG_TRACK, logdata);
-
-	if (KeyThreadInitedFlag != 0)
-		return 1;
-	KeyThreadInitedFlag = 1;
-
-	// check parameters
-	if (!fcgi_username || !fcgi_password || !fcgi_authserver || !fcgi_masterkeyserver || !fcgi_datakeyserver)
-	{
-		return 0;
-	}
 
 	// if already inited
 	if (Thread != NULL)
 		return 0;
-
-	timeout = 0;
 	
-	// initialize fc
-	memset(&fc, 0, sizeof(fcgi_crypt));
-	
-	// Authentication Token
-	timeout = get_auth_token(fc.token);
-	if (timeout > 0)
+	// check parameters
+	if (!fcgi_username || !fcgi_password || !fcgi_authserver || !fcgi_masterkeyserver || !fcgi_datakeyserver)
 	{
-		memcache_set_timeout(CACHE_KEYNAME_AUTHTOKEN, fc.token, timeout);
-	}
-	else
-	{
-		ret = -1;
-		goto KEYINIT_EXIT;
-	}
-
-	timeout = get_master_key(fc.token, fc.masterKeyId, fc.masterKey, fc.initializationVector);
-	if (timeout > 0)
-	{
-		memcache_set_timeout(CACHE_KEYNAME_MAKSTERKEYID, fc.masterKeyId, timeout);
-		memcache_set_timeout(CACHE_KEYNAME_MAKSTERKEY, fc.masterKey, timeout);
-		memcache_set_timeout(CACHE_KEYNAME_IV, fc.initializationVector, timeout);
-	}
-	else
-	{
-		ret = -1;
-		goto KEYINIT_EXIT;
-	}
-
-	// Data Key
-	timeout = get_data_key(fc.token, fc.masterKeyId, fc.dataKeyId, fc.encryptedDataKey);
-	if (timeout > 0)
-	{
-		memcache_set_timeout(CACHE_KEYNAME_DATAKEYID, fc.dataKeyId, timeout);
-		memcache_set_timeout(CACHE_KEYNAME_ENCRYPTEDDATAKEY, fc.encryptedDataKey, timeout);
-	}
-	else
-	{
-		ret = -1;
-		goto KEYINIT_EXIT;
-	}
- 
-	// calculate the real key
-	ret = key_calculate_real(&fc);
-	if (ret == 0)
-	{
-		char dataKeyCacheName[KEY_SIZE];
-		memset(dataKeyCacheName, 0, KEY_SIZE);
-		sprintf(dataKeyCacheName, "fastcgi-%s-%s-%s", fc.masterKeyId, fc.dataKeyId, fcgi_username);
-		memcache_set_timeout(dataKeyCacheName, fc.dataKey, KEY_STORE_PERIOD);
-		memcache_set_timeout(CACHE_KEYNAME_DATAKEY, fc.dataKey, KEY_STORE_PERIOD);
-	}
-	else
-	{
-		ret = -1;
-		goto KEYINIT_EXIT;
+		return 0;
 	}
 
 	// create key thread
@@ -741,22 +671,8 @@ int key_thread_init(void)
 	if (rv != APR_SUCCESS)
 	{
 		ret = -1;
-		goto KEYINIT_EXIT;
 	}
 	apr_thread_detach(Thread);
-
-KEYINIT_EXIT:
-	if (ret < 0)
-	{
-		// This is error, so delete all keys in memcache
-		memcache_delete(CACHE_KEYNAME_AUTHTOKEN);
-		memcache_delete(CACHE_KEYNAME_MAKSTERKEYID);
-		memcache_delete(CACHE_KEYNAME_MAKSTERKEY);
-		memcache_delete(CACHE_KEYNAME_IV);
-		memcache_delete(CACHE_KEYNAME_DATAKEYID);
-		memcache_delete(CACHE_KEYNAME_ENCRYPTEDDATAKEY);
-		memcache_delete(CACHE_KEYNAME_DATAKEY);
-	}
 
 	return ret;
 }

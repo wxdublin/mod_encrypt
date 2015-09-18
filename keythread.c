@@ -644,7 +644,7 @@ static apr_pool_t *ThreadPool = NULL;
 static apr_thread_t *Thread = NULL;
 int key_thread_init(void)
 {
-	int ret;
+	int ret = 0;
 	apr_threadattr_t *thread_attr;
 	apr_status_t rv;
 

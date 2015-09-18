@@ -639,17 +639,27 @@ KEY_ERROR:
 /**
  * first read the keys from key server and store into memcache
  */
-void key_thread_init(void)
+
+static apr_pool_t *ThreadPool = NULL;
+static apr_thread_t *Thread = NULL;
+
+int key_thread_init(void)
 {
 	int ret;
 	fcgi_crypt fc;
 	int timeout;
-	
+	apr_threadattr_t *thread_attr;
+	apr_status_t rv;
+
 	// check parameters
 	if (!fcgi_username || !fcgi_password || !fcgi_authserver || !fcgi_masterkeyserver || !fcgi_datakeyserver)
 	{
-		goto KEYINIT_EXIT;
+		return 0;
 	}
+
+	// if already inited
+	if (Thread != NULL)
+		return 0;
 
 	timeout = 0;
 	
@@ -664,6 +674,7 @@ void key_thread_init(void)
 	}
 	else
 	{
+		ret = -1;
 		goto KEYINIT_EXIT;
 	}
 
@@ -676,6 +687,7 @@ void key_thread_init(void)
 	}
 	else
 	{
+		ret = -1;
 		goto KEYINIT_EXIT;
 	}
 
@@ -688,9 +700,11 @@ void key_thread_init(void)
 	}
 	else
 	{
+		ret = -1;
 		goto KEYINIT_EXIT;
 	}
  
+	// calculate the real key
 	ret = key_calculate_real(&fc);
 	if (ret == 0)
 	{
@@ -702,11 +716,29 @@ void key_thread_init(void)
 	}
 	else
 	{
+		ret = -1;
 		goto KEYINIT_EXIT;
 	}
 
+	// create key thread
+	if (ThreadPool)
+	{
+		apr_pool_destroy(ThreadPool);
+		ThreadPool = NULL;
+	}
+
+	apr_pool_create(&ThreadPool, NULL);
+	apr_threadattr_create(&thread_attr, ThreadPool);
+	rv = apr_thread_create(&Thread, thread_attr, key_thread_func, NULL, ThreadPool);
+	if (rv != APR_SUCCESS)
+	{
+		ret = -1;
+		goto KEYINIT_EXIT;
+	}
+	apr_thread_detach(Thread);
+
 KEYINIT_EXIT:
-	if (timeout < 0)
+	if (ret < 0)
 	{
 		// This is error, so delete all keys in memcache
 		memcache_delete(CACHE_KEYNAME_AUTHTOKEN);
@@ -718,5 +750,5 @@ KEYINIT_EXIT:
 		memcache_delete(CACHE_KEYNAME_DATAKEY);
 	}
 
-	return;
+	return ret;
 }

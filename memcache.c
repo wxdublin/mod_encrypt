@@ -15,7 +15,10 @@ int memcache_init(const char *host_name, const int port_num)
 	char *result;
 
 	if ((host_name==NULL) || port_num < 1)
-		return -1;
+		goto MEMCACHE_INIT_EXIT;
+
+	if (Memcache != NULL)
+		return 0;
 
 	if (MemcachePool != NULL)
 	{

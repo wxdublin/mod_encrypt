@@ -2729,9 +2729,6 @@ static int post_process_for_redirects(request_rec * const r,
  * Process encrypt-script requests.  Based on mod_cgi::cgi_handler().
  */
 
-static apr_pool_t *ThreadPool = NULL;
-static apr_thread_t *Thread = NULL;
-
 static int content_handler(request_rec *r)
 {
 	fcgi_request *fr = NULL;
@@ -2765,45 +2762,20 @@ static int content_handler(request_rec *r)
 		goto HANDLER_EXIT;
 	}
 
-	/* Create thread for key management */
-	if (!Thread && (fcgi_encrypt || fcgi_decrypt))
+	// Initialize memcache
+	ret = memcache_init(fcgi_memcached_server, fcgi_memcached_port);
+	if (ret < 0)
 	{
-		apr_threadattr_t *thread_attr;
-		apr_status_t rv;
-
-		// Initialize memcache
-		memcache_destroy();
-		ret = memcache_init(fcgi_memcached_server, fcgi_memcached_port);
-		if (ret < 0)
-		{
-			sprintf(logdata, "Could not init to memcached server");
-			log_message(ENCRYPT_LOG_ERROR, logdata);
-
-			ret = HTTP_SERVICE_UNAVAILABLE;
-			goto HANDLER_EXIT;
-		}
+		sprintf(logdata, "Could not init to memcached server");
+		log_message(ENCRYPT_LOG_ERROR, logdata);
+	}
 		
-		// first read the keys from key server and store into memcache
-		key_thread_init();
-
-		// create key thread
-		if (ThreadPool)
-		{
-			apr_pool_destroy(ThreadPool);
-			ThreadPool = NULL;
-		}
-
-		apr_pool_create(&ThreadPool, NULL);
-		apr_threadattr_create(&thread_attr, ThreadPool);
-		rv = apr_thread_create(&Thread, thread_attr, key_thread_func, NULL, ThreadPool);
-		if (rv != APR_SUCCESS)
-		{
-			sprintf(logdata, "Could not start key thread, please check parameters and server addresses");
-			log_message(ENCRYPT_LOG_ERROR, logdata);
-
-			ret = HTTP_SERVICE_UNAVAILABLE;
-			goto HANDLER_EXIT;
-		}
+	// init key thread
+	ret = key_thread_init();
+	if (ret < 0)
+	{
+		sprintf(logdata, "Could not start key thread, please check parameters and server addresses");
+		log_message(ENCRYPT_LOG_ERROR, logdata);
 	}
 
 	// if PUT, initialize encrypt

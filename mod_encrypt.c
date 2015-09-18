@@ -356,6 +356,8 @@ static void fcgi_child_init(apr_pool_t * p, server_rec * dc)
 static void fcgi_child_init(server_rec *dc, pool *p)
 #endif
 {
+	int ret;
+	char logdata[BUF_SIZE];
 #ifdef WIN32
     /* Create the MBOX, TERM, and WAKE event handlers */
     fcgi_event_handles[0] = CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -392,6 +394,31 @@ static void fcgi_child_init(server_rec *dc, pool *p)
     apr_pool_cleanup_register(p, NULL, fcgi_child_exit, fcgi_child_exit);
 #endif
 #endif
+	// Initialize memcache
+	ret = memcache_init(fcgi_memcached_server, fcgi_memcached_port);
+	if (ret < 0)
+	{
+		sprintf(logdata, "Could not init to memcached server");
+		log_message(ENCRYPT_LOG_ERROR, logdata);
+	}
+	else
+	{
+		sprintf(logdata, "Inited memcached server");
+		log_message(ENCRYPT_LOG_INFO, logdata);
+	}
+
+	// init key thread
+	ret = key_thread_init();
+	if (ret < 0)
+	{
+		sprintf(logdata, "Could not start key thread, please check parameters and server addresses");
+		log_message(ENCRYPT_LOG_ERROR, logdata);
+	}
+	else
+	{
+		sprintf(logdata, "Started key thread");
+		log_message(ENCRYPT_LOG_INFO, logdata);
+	}
 }
 
 /*
@@ -2760,22 +2787,6 @@ static int content_handler(request_rec *r)
 		ap_log_rerror(FCGI_LOG_ERR_NOERRNO, r, "Encrypt: \"ExecCGI Option\" is off in this directory: %s", r->uri);
 		ret = HTTP_FORBIDDEN;
 		goto HANDLER_EXIT;
-	}
-
-	// Initialize memcache
-	ret = memcache_init(fcgi_memcached_server, fcgi_memcached_port);
-	if (ret < 0)
-	{
-		sprintf(logdata, "Could not init to memcached server");
-		log_message(ENCRYPT_LOG_ERROR, logdata);
-	}
-		
-	// init key thread
-	ret = key_thread_init();
-	if (ret < 0)
-	{
-		sprintf(logdata, "Could not start key thread, please check parameters and server addresses");
-		log_message(ENCRYPT_LOG_ERROR, logdata);
 	}
 
 	// if PUT, initialize encrypt

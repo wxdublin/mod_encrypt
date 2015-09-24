@@ -199,7 +199,7 @@ static int get_auth_token(char *tokenstr)
 
 		/* Perform the request, res will get the return code */ 
 		res = curl_easy_perform(curl);
-		sprintf(logdata, "KEY-THREAD - curl request: %s, username:%s", serverurl, fcgi_username);
+		sprintf(logdata, "KEY-THREAD - curl request: %s, senddata: %s", serverurl, senddata);
 		log_message(ENCRYPT_LOG_TRACK, logdata);
 
 		/* Check for errors */ 
@@ -312,7 +312,7 @@ static int get_master_key(const char *token, char *masterkeyid, char *masterkey,
 
 		/* Perform the request, res will get the return code */ 
 		res = curl_easy_perform(curl);
-		sprintf(logdata, "KEY-THREAD - curl request: %s, username:%s", serverurl, fcgi_username);
+		sprintf(logdata, "KEY-THREAD - curl request: %s, header: %s", serverurl, headerstring);
 		log_message(ENCRYPT_LOG_TRACK, logdata);
 
 		/* Check for errors */ 
@@ -445,7 +445,7 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 
 		/* Perform the request, res will get the return code */ 
 		res = curl_easy_perform(curl);
-		sprintf(logdata, "KEY-THREAD - curl request: %s, username:%s", serverurl, fcgi_username);
+		sprintf(logdata, "KEY-THREAD - curl request: %s, header:%s", serverurl, headerstring);
 		log_message(ENCRYPT_LOG_TRACK, logdata);
 
 		/* Check for errors */ 
@@ -546,6 +546,7 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 	int ret;
 	fcgi_crypt fc;
 	int timeout;
+	int authtimeout, mktimeout, dktimeout;
 	
 	// check parameters
 	if (!fcgi_username || !fcgi_password || !fcgi_authserver || !fcgi_masterkeyserver || !fcgi_datakeyserver)
@@ -553,6 +554,9 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 		apr_thread_exit(thd, APR_SUCCESS);
 		return NULL;
 	}
+
+	// init timeout values
+	authtimeout = mktimeout = dktimeout = 0;
 
 	while (1)
 	{
@@ -562,51 +566,76 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 		memset(&fc, 0, sizeof(fcgi_crypt));
 
 		// Authentication Token
-		timeout = get_auth_token(fc.token);
-		if (timeout > 0)
+		authtimeout -= 30;
+		if (authtimeout <= 30)
 		{
-			memcache_set_timeout(CACHE_KEYNAME_AUTHTOKEN, fc.token, timeout);
-		}
-		else
-		{
-			ret = memcache_get(CACHE_KEYNAME_AUTHTOKEN, fc.token);
-			if (ret < 0)
+			timeout = get_auth_token(fc.token);
+			if (timeout > 0)
+			{
+				memcache_set_timeout(CACHE_KEYNAME_AUTHTOKEN, fc.token, timeout);
+				authtimeout = timeout;
+				mktimeout = dktimeout = -1;
+			}
+			else
+			{
 				goto KEY_ERROR;
+			}
 		}
-
+		ret = memcache_get(CACHE_KEYNAME_AUTHTOKEN, fc.token);
+		if (ret < 0)
+		{
+			goto KEY_ERROR;
+		}
+		
 		// Master Key
-		timeout = get_master_key(fc.token, fc.masterKeyId, fc.masterKey, fc.initializationVector);
-		if (timeout > 0)
+		mktimeout -= 30;
+		if (mktimeout <= 30)
 		{
-			memcache_set_timeout(CACHE_KEYNAME_MAKSTERKEYID, fc.masterKeyId, timeout);
-			memcache_set_timeout(CACHE_KEYNAME_MAKSTERKEY, fc.masterKey, timeout);
-			memcache_set_timeout(CACHE_KEYNAME_IV, fc.initializationVector, timeout);
-		}
-		else
-		{
-			ret = memcache_get(CACHE_KEYNAME_MAKSTERKEYID, fc.masterKeyId);
-			ret += memcache_get(CACHE_KEYNAME_MAKSTERKEY, fc.masterKey);
-			ret += memcache_get(CACHE_KEYNAME_IV, fc.initializationVector);
-			if (ret < 0)
+			timeout = get_master_key(fc.token, fc.masterKeyId, fc.masterKey, fc.initializationVector);
+			if (timeout > 0)
+			{
+				memcache_set_timeout(CACHE_KEYNAME_MAKSTERKEYID, fc.masterKeyId, timeout);
+				memcache_set_timeout(CACHE_KEYNAME_MAKSTERKEY, fc.masterKey, timeout);
+				memcache_set_timeout(CACHE_KEYNAME_IV, fc.initializationVector, timeout);
+				mktimeout = timeout;
+				dktimeout = -1;
+			}
+			else
+			{
 				goto KEY_ERROR;
+			}
 		}
-
+		ret = memcache_get(CACHE_KEYNAME_MAKSTERKEYID, fc.masterKeyId);
+		ret += memcache_get(CACHE_KEYNAME_MAKSTERKEY, fc.masterKey);
+		ret += memcache_get(CACHE_KEYNAME_IV, fc.initializationVector);
+		if (ret < 0)
+		{
+			goto KEY_ERROR;
+		}
+		
 		// Data Key
-		timeout = get_data_key(fc.token, fc.masterKeyId, fc.dataKeyId, fc.encryptedDataKey);
-		if (timeout > 0)
+		dktimeout -= 30;
+		if (dktimeout <= 30)
 		{
-			memcache_set_timeout(CACHE_KEYNAME_DATAKEYID, fc.dataKeyId, timeout);
-			memcache_set_timeout(CACHE_KEYNAME_ENCRYPTEDDATAKEY, fc.encryptedDataKey, timeout);
-		}
-		else
-		{
-			ret = memcache_get(CACHE_KEYNAME_DATAKEYID, fc.dataKeyId);
-			ret += memcache_get(CACHE_KEYNAME_ENCRYPTEDDATAKEY, fc.encryptedDataKey);
-			ret += memcache_get(CACHE_KEYNAME_DATAKEY, fc.dataKey);
-			if (ret < 0)
+			timeout = get_data_key(fc.token, fc.masterKeyId, fc.dataKeyId, fc.encryptedDataKey);
+			if (timeout > 0)
+			{
+				memcache_set_timeout(CACHE_KEYNAME_DATAKEYID, fc.dataKeyId, timeout);
+				memcache_set_timeout(CACHE_KEYNAME_ENCRYPTEDDATAKEY, fc.encryptedDataKey, timeout);
+				dktimeout = timeout;
+			}
+			else
+			{
 				goto KEY_ERROR;
+			}
 		}
-
+		ret = memcache_get(CACHE_KEYNAME_DATAKEYID, fc.dataKeyId);
+		ret += memcache_get(CACHE_KEYNAME_ENCRYPTEDDATAKEY, fc.encryptedDataKey);
+		if (ret < 0)
+		{
+			goto KEY_ERROR;
+		}
+		
 		// calculate the real key
 		ret = key_calculate_real(&fc);
 		if (ret == 0)
@@ -618,12 +647,20 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 
 			if (timeout <= 0)
 				timeout = KEY_STORE_PERIOD;
-			memcache_set_timeout(CACHE_KEYNAME_DATAKEY, fc.dataKey, timeout);
+			memcache_set_timeout(CACHE_KEYNAME_DATAKEY, fc.dataKey, 60);
 		}
 		else
 			goto KEY_ERROR;
 
+#ifdef WIN32
+		Sleep(30000);
+#else
+		sleep(30);
+#endif
+		continue;
+
 KEY_ERROR:
+		authtimeout = mktimeout = dktimeout = -1;
 #ifdef WIN32
 		Sleep(30000);
 #else

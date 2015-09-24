@@ -195,7 +195,7 @@ static int get_auth_token(char *tokenstr)
 
 		/* Perform the request, res will get the return code */ 
 		res = curl_easy_perform(curl);
-		sprintf(logdata, "curl request: %s, username:%s", serverurl, fcgi_username);
+		sprintf(logdata, "curl request: %s, senddata: %s", serverurl, senddata);
 		log_message(ENCRYPT_LOG_TRACK, logdata);
 
 		/* Check for errors */ 
@@ -308,7 +308,7 @@ static int get_master_key(const char *token, char *masterkeyid, char *masterkey,
 
 		/* Perform the request, res will get the return code */ 
 		res = curl_easy_perform(curl);
-		sprintf(logdata, "curl request: %s, username:%s", serverurl, fcgi_username);
+		sprintf(logdata, "curl request: %s, header: %s", serverurl, headerstring);
 		log_message(ENCRYPT_LOG_TRACK, logdata);
 
 		/* Check for errors */ 
@@ -441,7 +441,7 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 
 		/* Perform the request, res will get the return code */ 
 		res = curl_easy_perform(curl);
-		sprintf(logdata, "curl request: %s, username:%s", serverurl, fcgi_username);
+		sprintf(logdata, "curl request: %s, header: %s", serverurl, headerstring);
 		log_message(ENCRYPT_LOG_TRACK, logdata);
 
 		/* Check for errors */ 

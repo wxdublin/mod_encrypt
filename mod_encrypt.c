@@ -357,13 +357,8 @@ static apcb_t init_module(server_rec *s, pool *p)
 		ret = key_thread_init();
 		if (ret < 0)
 		{
-			sprintf(logdata, "Could not start key thread, please check parameters and server addresses");
+			sprintf(logdata, "Could not init key thread, please check parameters and server addresses");
 			log_message(ENCRYPT_LOG_ERROR, logdata);
-		}
-		else if (ret == 1)
-		{
-			sprintf(logdata, "Already started server");
-			log_message(ENCRYPT_LOG_INFO, logdata);
 		}
 		else
 		{
@@ -433,7 +428,6 @@ static void fcgi_child_init(server_rec *dc, pool *p)
     }
 
 	/* Initialize Memcache and Key Thread */
-
 	{
 		int ret;
 		char logdata[1024];
@@ -445,11 +439,6 @@ static void fcgi_child_init(server_rec *dc, pool *p)
 			sprintf(logdata, "Could not init to memcached server");
 			log_message(ENCRYPT_LOG_ERROR, logdata);
 		}
-		else if (ret == 1)
-		{
-			sprintf(logdata, "Already inited server");
-			log_message(ENCRYPT_LOG_INFO, logdata);
-		}
 		else
 		{
 			sprintf(logdata, "Inited memcached server");
@@ -460,13 +449,8 @@ static void fcgi_child_init(server_rec *dc, pool *p)
 		ret = key_thread_init();
 		if (ret < 0)
 		{
-			sprintf(logdata, "Could not start key thread, please check parameters and server addresses");
+			sprintf(logdata, "Could not init key thread, please check parameters and server addresses");
 			log_message(ENCRYPT_LOG_ERROR, logdata);
-		}
-		else if (ret == 1)
-		{
-			sprintf(logdata, "Already started server");
-			log_message(ENCRYPT_LOG_INFO, logdata);
 		}
 		else
 		{
@@ -840,6 +824,8 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 		memset(datakeyid, 0, 256);
 		memset(masterkey, 0, 256);
 		memset(iv, 0, 256);
+
+		// if exist "Bulk_encrypt" & "Obj_encrypt" header?
 		if (bulk_encrypt && obj_encrypt)
 		{
 			int ret;
@@ -870,34 +856,35 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 				ret = InitDecrypt(&fr->decryptor);
 				if (ret < 0)
 					return ap_psprintf(r->pool, "could not retrieve old keys");
-			}
-		}
-		
-		if ((usermd) && (fcgi_decrypt == TRUE))
-		{
-			int i, ret;
-			len = strlen(usermd);
 
-			CloseCrypt(&fr->decryptor);
-			ret = InitDecrypt(&fr->decryptor);
-			if (ret < 0)
-				return ap_psprintf(r->pool, "could not retrieve old keys");
-
-			CryptDataStream(&fr->decryptor, usermd, 0, len);
-			for (i=0; i<len; i++) 
-			{
-				unsigned char ch = usermd[i];
-				if (ch > (unsigned char)0x8F)
+				// Decrypt "usermd" metadata
+				if (usermd)
 				{
-					ch -= (unsigned char)0x70;
-					usermd[i] = ch;
+					int i, ret;
+					len = strlen(usermd);
+
+					CloseCrypt(&fr->decryptor);
+					ret = InitDecrypt(&fr->decryptor);
+					if (ret < 0)
+						return ap_psprintf(r->pool, "could not retrieve old keys");
+
+					CryptDataStream(&fr->decryptor, usermd, 0, len);
+					for (i=0; i<len; i++) 
+					{
+						unsigned char ch = usermd[i];
+						if (ch > (unsigned char)0x8F)
+						{
+							ch -= (unsigned char)0x70;
+							usermd[i] = ch;
+						}
+					}
+
+					CloseCrypt(&fr->decryptor);
+					ret = InitDecrypt(&fr->decryptor);
+					if (ret < 0)
+						return ap_psprintf(r->pool, "could not retrieve old keys");
 				}
 			}
-
-			CloseCrypt(&fr->decryptor);
-			ret = InitDecrypt(&fr->decryptor);
-			if (ret < 0)
-				return ap_psprintf(r->pool, "could not retrieve old keys");
 		}
 	}
 

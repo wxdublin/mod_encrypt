@@ -27,6 +27,7 @@
 #include "key.h"
 #include "keythread.h"
 #include "log.h"
+#include "base64.h"
 
 #ifndef timersub
 #define	timersub(a, b, result)                              \
@@ -813,7 +814,7 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 		char masterkeyid[256], datakeyid[256], masterkey[256], iv[256];
 		char *bulk_encrypt = (char *)ap_table_get(r->err_headers_out, "Bulk_encrypt");
 		char *obj_encrypt = (char *)ap_table_get(r->err_headers_out, "Obj_encrypt");
-		char *usermd = (char *)ap_table_get(r->err_headers_out, "X-Scal-Usermd");
+		char *usermd_str = (char *)ap_table_get(r->err_headers_out, "X-Scal-Usermd");
 
 		// logging
 		sprintf(logdata, "received metadata, bulk_encrypt:%s, obj_encrypt:%s", bulk_encrypt?bulk_encrypt:"null", obj_encrypt?obj_encrypt:"null");
@@ -857,27 +858,26 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 				if (ret < 0)
 					return ap_psprintf(r->pool, "could not retrieve old keys");
 
-				// Decrypt "usermd" metadata
-				if (usermd)
+				// Decrypt "usermd_str" metadata
+				if (usermd_str)
 				{
-					int i, ret;
-					len = strlen(usermd);
+					int ret;
+					char decodebuff[KEY_SIZE], encodebuff[KEY_SIZE];
+					int decodelen, encodelen;
+
+					// Decode base64
+					decodelen = Base64decode(decodebuff, usermd_str);
 
 					CloseCrypt(&fr->decryptor);
 					ret = InitDecrypt(&fr->decryptor);
 					if (ret < 0)
 						return ap_psprintf(r->pool, "could not retrieve old keys");
 
-					CryptDataStream(&fr->decryptor, usermd, 0, len);
-					for (i=0; i<len; i++) 
-					{
-						unsigned char ch = usermd[i];
-						if (ch > (unsigned char)0x8F)
-						{
-							ch -= (unsigned char)0x70;
-							usermd[i] = ch;
-						}
-					}
+					CryptDataStream(&fr->decryptor, decodebuff, 0, decodelen);
+
+					encodelen = Base64encode(encodebuff, decodebuff, decodelen) - 1;
+
+					memcpy(usermd_str, encodebuff, encodelen);
 
 					CloseCrypt(&fr->decryptor);
 					ret = InitDecrypt(&fr->decryptor);

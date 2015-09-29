@@ -7,6 +7,8 @@
 
 #include "crypt.h"
 #include "log.h"
+#include "base64.h"
+#include "key.h"
 
 #ifdef APACHE2
 #include "apr_lib.h"
@@ -275,51 +277,44 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
             /* drop through */
 
         case VALUE:
-			if (fcgi_encrypt == TRUE)
+			if ((fcgi_encrypt == TRUE) && 
+				(strncasecmp(*env->envp, "HTTP_X_SCAL_USERMD", env->nameLen) == 0))
 			{
-				if (strncasecmp(*env->envp, "HTTP_X_SCAL_USERMD", env->nameLen) == 0) {
-					int i, len;
-					char *buff;
+				int decodelen, encodelen;
+				char decodebuff[KEY_SIZE], encodebuff[KEY_SIZE];
 
-					len = env->valueLen;
+				// decode base64
+				decodelen = Base64decode(decodebuff, env->equalPtr);
 
-					// alloc memory
-					buff = malloc(env->valueLen);
-					memcpy(buff, env->equalPtr, len);
+				CloseCrypt(&fr->encryptor);
+				InitEncrypt(&fr->encryptor);
 
-					CloseCrypt(&fr->encryptor);
-					InitEncrypt(&fr->encryptor);
+				// Remove special characters in ciphered text
+				CryptDataStream(&fr->encryptor, decodebuff, 0, decodelen);
 
-					// Remove special characters in ciphered text
-					CryptDataStream(&fr->encryptor, buff, 0, len);
-					for (i=0; i<len; i++) 
-					{
-						if ((buff[i] == '\r') || (buff[i] == '\n') || (buff[i] == '\0') || 
-							(buff[i] == '\v') || (buff[i] == '\f'))	{
-								env->equalPtr[i] += 0x70;
-						}
-					}
+				// encode base64
+				encodelen = Base64encode(encodebuff, decodebuff, decodelen) - 1;
 
-					CloseCrypt(&fr->encryptor);
-					InitEncrypt(&fr->encryptor);
+				CloseCrypt(&fr->encryptor);
+				InitEncrypt(&fr->encryptor);
 
-					// crypt again after removing special characters
-					CryptDataStream(&fr->encryptor, env->equalPtr, 0, len);
+				charCount = fcgi_buf_add_block(fr->serverOutputBuffer, encodebuff, encodelen);
 
-					CloseCrypt(&fr->encryptor);
-					InitEncrypt(&fr->encryptor);
-
-					free(buff);
-
+				if (charCount != encodelen) {
+					env->equalPtr += charCount;
+					env->valueLen -= charCount;
+					return (FALSE);
 				}
 			}
-			 			
-			charCount = fcgi_buf_add_block(fr->serverOutputBuffer, env->equalPtr, env->valueLen);
-            if (charCount != env->valueLen) {
-                env->equalPtr += charCount;
-                env->valueLen -= charCount;
-                return (FALSE);
-            }
+			else
+			{
+				charCount = fcgi_buf_add_block(fr->serverOutputBuffer, env->equalPtr, env->valueLen);
+				if (charCount != env->valueLen) {
+					env->equalPtr += charCount;
+					env->valueLen -= charCount;
+					return (FALSE);
+				}
+			}
             env->pass = PREP;
         }
         ++env->envp;

@@ -25,8 +25,9 @@ static int key_calculate_real(fcgi_crypt * fc)
 	int i;
 	size_t len;
 	unsigned char mkhex[32], ivhex[16];
-	unsigned char keyencrypted[KEY_SIZE];
-	unsigned char keydecrypted[KEY_SIZE];
+	char decodebuf[KEY_SIZE];
+	int decodelen;
+	unsigned char keystr[KEY_SIZE];
 	char *keyencbase64;
 
 	if (!fc)
@@ -80,16 +81,17 @@ static int key_calculate_real(fcgi_crypt * fc)
 	}
 
 	// decode base64
-	b64_decode(keyencbase64, (char *)keyencrypted);
+	decodelen = Base64decode(decodebuf, keyencbase64);
 
 	// decrypt key
-	memset(keydecrypted, 0, KEY_SIZE);
-	len = DecryptAesCBC(keyencrypted, (int)strlen((const char *)keyencrypted), keydecrypted, mkhex, ivhex);
+	memset(keystr, 0, KEY_SIZE);
+	len = DecryptAesCBC(decodebuf, decodelen, keystr, mkhex, ivhex);
+
 	if (len < 0)
 		return -1;
 
 	// store into variable
-	memcpy(fc->dataKey, keydecrypted, len);
+	memcpy(fc->dataKey, keystr, len);
 	fc->dataKey[len] = 0;
 	fc->dataKeyLength = len;
 

@@ -26,12 +26,6 @@ int InitEncrypt(fcgi_crypt * encryptor)
 {
 	if (encryptor->dataKeyLength == 0)
 	{
-// 		encryptor->dataKeyLength = 15;
-// 		strcpy(encryptor->dataKey, "deadbeef0123456");
-// 		encryptor->dataKey[15] = 0;
-// 		strcpy(encryptor->masterKeyId, "5e0e9463-acc2-45c7-91a4-ce730f68842b");
-// 		strcpy(encryptor->dataKeyId, "2bae2abd-2615-47d9-a508-fe1b7a417ccd");
-
 		// get active key
  		if (key_active_request(encryptor) < 0)
  			return -1;
@@ -51,10 +45,6 @@ int InitDecrypt(fcgi_crypt * decryptor)
 {
 	if (decryptor->dataKeyLength == 0)
 	{
-// 		decryptor->dataKeyLength = 15;
-// 		strcpy(decryptor->dataKey, "deadbeef0123456");
-// 		decryptor->dataKey[15] = 0;
-
 		// get active key
  		if (key_old_request(decryptor) < 0)
  			return -1;

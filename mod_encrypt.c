@@ -28,6 +28,7 @@
 #include "keythread.h"
 #include "log.h"
 #include "base64.h"
+#include "encap.h"
 
 #ifndef timersub
 #define	timersub(a, b, result)                              \
@@ -809,82 +810,46 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 	/* decrypt parameters */
 	
 	{
-		char bracket[2];
-		char logdata[1024];
-		char masterkeyid[256], datakeyid[256], masterkey[256], iv[256];
-		char *bulk_encrypt = (char *)ap_table_get(r->err_headers_out, "Bulk_encrypt");
-		char *obj_encrypt = (char *)ap_table_get(r->err_headers_out, "Obj_encrypt");
-		char *usermd_str = (char *)ap_table_get(r->err_headers_out, "X-Scal-Usermd");
+		int ret;
+		char *usermdStr;
+		const char *usermdMetadata;
+		int mkidLen, dkidLen, usermdLen;
+		char logdata[BUF_SIZE];
+				
+		usermdMetadata = (const char *)ap_table_get(r->err_headers_out, "X-Scal-Usermd");
 
-		// logging
-		sprintf(logdata, "received metadata, bulk_encrypt:%s, obj_encrypt:%s", bulk_encrypt?bulk_encrypt:"null", obj_encrypt?obj_encrypt:"null");
-		log_message(ENCRYPT_LOG_TRACK, logdata);
-
-		// get masterkeyid, datakeyid, iv
-		memset(masterkeyid, 0, 256);
-		memset(datakeyid, 0, 256);
-		memset(masterkey, 0, 256);
-		memset(iv, 0, 256);
-
-		// if exist "Bulk_encrypt" & "Obj_encrypt" header?
-		if (bulk_encrypt && obj_encrypt)
+		if (usermdMetadata)
 		{
-			int ret;
-			fcgi_crypt *fc;
-			sscanf(bulk_encrypt, "%c %s %s %c", &bracket[0], masterkeyid, datakeyid, &bracket[1]);
-			sscanf(obj_encrypt, "%c %s %s %c", &bracket[0], masterkey, iv, &bracket[1]);
+			usermdLen = strlen(usermdMetadata);
+			usermdStr = malloc(usermdLen+1);
+			if (!usermdStr)
+				return NULL;
 
-			fc = &fr->decryptor;
+			sprintf(logdata, "received X-Scal-Usermd: %s", usermdMetadata);
+			log_message(ENCRYPT_LOG_TRACK, logdata);
 
-			memcpy(fc->masterKeyId, masterkeyid, strlen(masterkeyid));
-			fc->masterKeyId[strlen(masterkeyid)] = 0;
+			mkidLen = 256; dkidLen = 256;
+			ret = decap_metadata(usermdMetadata, strlen(usermdMetadata), \
+				fr->decryptor.masterKeyId, &mkidLen, fr->decryptor.dataKeyId, &dkidLen, \
+				usermdStr, &usermdLen);
 
-			memcpy(fc->dataKeyId, datakeyid, strlen(datakeyid));
-			fc->dataKeyId[strlen(datakeyid)] = 0;
-
-			memcpy(fc->masterKey, masterkey, strlen(masterkey));
-			fc->masterKey[strlen(masterkey)] = 0;
-
-			memcpy(fc->initializationVector, iv, strlen(iv));
-			fc->initializationVector[strlen(iv)] = 0;
-
-			ap_table_unset(r->err_headers_out, "Bulk_encrypt");
-			ap_table_unset(r->err_headers_out, "Obj_encrypt");
-
-			if (fcgi_decrypt == TRUE)
+			if (ret < 0) 
 			{
-				CloseCrypt(&fr->decryptor);
-				ret = InitDecrypt(&fr->decryptor);
-				if (ret < 0)
-					return ap_psprintf(r->pool, "could not retrieve old keys");
-
-				// Decrypt "usermd_str" metadata
-				if (usermd_str)
-				{
-					int ret;
-					char decodebuff[KEY_SIZE], encodebuff[KEY_SIZE];
-					int decodelen, encodelen;
-
-					// Decode base64
-					decodelen = Base64decode(decodebuff, usermd_str);
-
-					CloseCrypt(&fr->decryptor);
-					ret = InitDecrypt(&fr->decryptor);
-					if (ret < 0)
-						return ap_psprintf(r->pool, "could not retrieve old keys");
-
-					CryptDataStream(&fr->decryptor, decodebuff, 0, decodelen);
-
-					encodelen = Base64encode(encodebuff, decodebuff, decodelen) - 1;
-
-					memcpy(usermd_str, encodebuff, encodelen);
-
-					CloseCrypt(&fr->decryptor);
-					ret = InitDecrypt(&fr->decryptor);
-					if (ret < 0)
-						return ap_psprintf(r->pool, "could not retrieve old keys");
-				}
+				free(usermdStr);
+				return NULL;
 			}
+
+			ap_table_unset(r->err_headers_out, "X-Scal-Usermd");
+			ap_table_add(r->err_headers_out, "X-Scal-Usermd", usermdStr);
+
+			sprintf(logdata, "masterKeyId: %s dataKeyId: %s usermd: %s ", \
+				fr->decryptor.masterKeyId, fr->decryptor.dataKeyId, usermdStr);
+			log_message(ENCRYPT_LOG_TRACK, logdata);
+
+			free(usermdStr);
+
+			CloseCrypt(&fr->decryptor);
+			InitDecrypt(&fr->decryptor);
 		}
 	}
 
@@ -2835,6 +2800,8 @@ static int content_handler(request_rec *r)
 		ret = HTTP_FORBIDDEN;
 		goto HANDLER_EXIT;
 	}
+
+	InitEncrypt(&fr->encryptor);
 
 	/* Process the encrypt-script request */
 	if ((ret = do_work(r, fr)) != OK)

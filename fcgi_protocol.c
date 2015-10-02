@@ -9,6 +9,7 @@
 #include "log.h"
 #include "base64.h"
 #include "key.h"
+#include "encap.h"
 
 #ifdef APACHE2
 #include "apr_lib.h"
@@ -230,6 +231,8 @@ static void add_pass_header_vars(fcgi_request *fr)
 int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
 {
     int charCount;
+	char *usermdStr = NULL;
+	int usermdLen = 0;
 
     if (env->envp == NULL) {
         ap_add_common_vars(r);
@@ -257,6 +260,16 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
             env->pass = HEADER;
             /* drop through */
 
+			// drop if "X-SCAL-USERMD"
+			if ((fcgi_encrypt == TRUE) && 
+				(strncasecmp(*env->envp, "HTTP_X_SCAL_USERMD", env->nameLen) == 0))
+			{
+				usermdLen = env->valueLen;
+				usermdStr = env->equalPtr;
+				env->pass = PREP;
+				break;
+			}
+			
         case HEADER:
             if (BufferFree(fr->serverOutputBuffer) < (int)(sizeof(FCGI_Header) + env->headerLen)) {
                 return (FALSE);
@@ -277,82 +290,77 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
             /* drop through */
 
         case VALUE:
-			if ((fcgi_encrypt == TRUE) && 
-				(strncasecmp(*env->envp, "HTTP_X_SCAL_USERMD", env->nameLen) == 0))
-			{
-				int decodelen, encodelen;
-				char decodebuff[KEY_SIZE], encodebuff[KEY_SIZE];
-
-				// decode base64
-				decodelen = Base64decode(decodebuff, env->equalPtr);
-
-				CloseCrypt(&fr->encryptor);
-				InitEncrypt(&fr->encryptor);
-
-				// Remove special characters in ciphered text
-				CryptDataStream(&fr->encryptor, decodebuff, 0, decodelen);
-
-				// encode base64
-				encodelen = Base64encode(encodebuff, decodebuff, decodelen) - 1;
-
-				CloseCrypt(&fr->encryptor);
-				InitEncrypt(&fr->encryptor);
-
-				charCount = fcgi_buf_add_block(fr->serverOutputBuffer, encodebuff, encodelen);
-
-				if (charCount != encodelen) {
-					env->equalPtr += charCount;
-					env->valueLen -= charCount;
-					return (FALSE);
-				}
+			charCount = fcgi_buf_add_block(fr->serverOutputBuffer, env->equalPtr, env->valueLen);
+			if (charCount != env->valueLen) {
+				env->equalPtr += charCount;
+				env->valueLen -= charCount;
+				return (FALSE);
 			}
-			else
-			{
-				charCount = fcgi_buf_add_block(fr->serverOutputBuffer, env->equalPtr, env->valueLen);
-				if (charCount != env->valueLen) {
-					env->equalPtr += charCount;
-					env->valueLen -= charCount;
-					return (FALSE);
-				}
-			}
+			
             env->pass = PREP;
         }
         ++env->envp;
     }
 
-	if (!strcasecmp(r->method, "PUT") && (fcgi_encrypt == TRUE) && fr->encryptor.masterKeyId &&
-		fr->encryptor.dataKeyId && fr->encryptor.initializationVector)
+	if (fcgi_encrypt == TRUE)
 	{
-		char bulkvalue[512];
-		char objvalue[512];
-		char logdata[1024];
-		int headerLen, nameLen, valueLen, totalLen;
-		unsigned char headerBuff[8];
-		// bulk
-		memset(bulkvalue, 0, 512);
-		sprintf(bulkvalue, "{ %s %s }", fr->encryptor.masterKeyId, fr->encryptor.dataKeyId);
-		nameLen = 12;
-		valueLen = strlen(bulkvalue);
-		build_env_header(nameLen, valueLen, headerBuff, &headerLen);
-		totalLen = headerLen + nameLen + valueLen;
-		queue_header(fr, FCGI_PARAMS, totalLen);
-		fcgi_buf_add_block(fr->serverOutputBuffer, (char *)headerBuff, headerLen);
-		fcgi_buf_add_block(fr->serverOutputBuffer, "Bulk_encrypt", 12);
-		fcgi_buf_add_block(fr->serverOutputBuffer, bulkvalue, strlen(bulkvalue));
-		// obj
-		memset(objvalue, 0, 512);
-		sprintf(objvalue, "{ %s %s }", fr->encryptor.masterKey, fr->encryptor.initializationVector);
-		nameLen = 11;
-		valueLen = strlen(objvalue);
-		build_env_header(nameLen, valueLen, headerBuff, &headerLen);
-		totalLen = headerLen + nameLen + valueLen;
-		queue_header(fr, FCGI_PARAMS, totalLen);
-		fcgi_buf_add_block(fr->serverOutputBuffer, (char *)headerBuff, headerLen);
-		fcgi_buf_add_block(fr->serverOutputBuffer, "Obj_encrypt", 11);
-		fcgi_buf_add_block(fr->serverOutputBuffer, objvalue, strlen(objvalue));
-		// logging
-		sprintf(logdata, "added new metadata, bulk_encrypt:%s, obj_encrypt:%s", bulkvalue, objvalue);
+		char *encapbuff;
+		int encaplen;
+		int mkidlen, dkidlen;
+		char headerbuff[8];
+		int headerlen, totallen;
+		char logdata[BUF_SIZE];
+
+		mkidlen = strlen(fr->encryptor.masterKeyId);
+		dkidlen = strlen(fr->encryptor.dataKeyId);
+
+		if ((mkidlen == 0) || (dkidlen == 0))
+		{
+			return FALSE;
+		}
+		
+		encaplen = (46 + usermdLen + mkidlen + dkidlen) * 2;
+
+		encapbuff = malloc(encaplen);
+		if (!encapbuff)
+			return FALSE;
+
+		encaplen = encap_metadata(encapbuff, encaplen, \
+			fr->encryptor.masterKeyId, mkidlen, \
+			fr->encryptor.dataKeyId, dkidlen, \
+			usermdStr, usermdLen);
+
+		if (encaplen < 0)
+		{
+			free(encapbuff);
+			return FALSE;
+		}
+
+		build_env_header(18, encaplen, headerbuff, &headerlen);
+
+		totallen = headerlen + 18 + encaplen;
+		if (BufferFree(fr->serverOutputBuffer) < (int)(sizeof(FCGI_Header) + headerlen)) {
+			return FALSE;
+		}
+		queue_header(fr, FCGI_PARAMS, totallen);
+		fcgi_buf_add_block(fr->serverOutputBuffer, headerbuff, headerlen);
+
+		charCount = fcgi_buf_add_block(fr->serverOutputBuffer, "HTTP_X_SCAL_USERMD", 18);
+		if (charCount != 18) {
+			free(encapbuff);
+			return FALSE;
+		}
+
+		charCount = fcgi_buf_add_block(fr->serverOutputBuffer, encapbuff, encaplen);
+
+		sprintf(logdata, "sending X-Scal-Usermd: %s", encapbuff);
 		log_message(ENCRYPT_LOG_TRACK, logdata);
+
+		free(encapbuff);
+
+		if (charCount != encaplen) {
+			return FALSE;
+		}
 	}
 
     if (BufferFree(fr->serverOutputBuffer) < sizeof(FCGI_Header)) {

@@ -199,6 +199,11 @@ int decap_metadata(const char *decapStr, int decapLen,
 			*(masterKeyLen) = keylen;
 			ptr += keylen;
 		}
+		else
+		{
+			masterKeyId[0] = 0;
+			*(masterKeyLen) = 0;
+		}
 	}
 
 	// get Data Key
@@ -217,9 +222,14 @@ int decap_metadata(const char *decapStr, int decapLen,
 			*(dataKeyLen) = keylen;
 			ptr += keylen;
 		}
+		else
+		{
+			dataKeyId[0] = 0;
+			*(dataKeyLen) = 0;
+		}
 	}
 
-	// get Usermd string
+	// get Usermd string 
 	{
 		// size of usermd
 		keylen = *(short *)ptr;
@@ -235,7 +245,10 @@ int decap_metadata(const char *decapStr, int decapLen,
 				goto DECAP_FAILED;
 
 			if (*(usermdLen) < Base64encode_len(keylen))
+			{
+				free(usermdEncodeStr);
 				goto DECAP_FAILED;
+			}
 
 			// get usermd
 			memcpy(usermdEncodeStr, ptr, keylen);
@@ -244,6 +257,11 @@ int decap_metadata(const char *decapStr, int decapLen,
 
 			*(usermdLen) = Base64encode(usermdStr, usermdEncodeStr, keylen);
 			free(usermdEncodeStr);
+		}
+		else
+		{
+			usermdStr[0] = 0;
+			*(usermdLen) = 0;
 		}
 	}
 

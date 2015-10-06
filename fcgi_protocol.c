@@ -336,7 +336,7 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
 			return FALSE;
 		}
 
-		build_env_header(18, encaplen, headerbuff, &headerlen);
+		build_env_header(18, encaplen, (unsigned char*)headerbuff, &headerlen);
 
 		totallen = headerlen + 18 + encaplen;
 		if (BufferFree(fr->serverOutputBuffer) < (int)(sizeof(FCGI_Header) + headerlen)) {

@@ -20,7 +20,7 @@
 #include "crypt.h"
 #include "key.h"
 
-//////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////// 
 
 int InitEncrypt(fcgi_crypt * encryptor)
 {
@@ -72,7 +72,7 @@ void CloseCrypt(fcgi_crypt * cryptor)
 
 /*******************************************************************************
  * Encrypt any data by AES ctr encryption algorithm
- */
+ */ 
 void CryptDataStream(fcgi_crypt * cryptor, char *data, int offset, int len)
 {
 	int i;

@@ -14,11 +14,6 @@
 static unsigned int gSalt[] = {12345, 54321};
 
 //////////////////////////////////////////////////////////////////////////
-static void handleErrors_(void)
-{
-	ERR_print_errors_fp(stderr);
-	abort();
-}
 
 static int handleErrors(void)
 {

@@ -1,11 +1,11 @@
 /*
- * $Id: mod_encrypt.h,v 1.55 2009/09/29 00:31:55 robs Exp $
+ * $Id: mod_encrypt.h,v 1.55 2015/10/05 00:31:55 robs Exp $
  */
 
 #ifndef MOD_ENCRYPT_H
 #define MOD_ENCRYPT_H
 
-#define MOD_ENCRYPT_VERSION "mod_encrypt-SNAP-0910052141"
+#define MOD_ENCRYPT_VERSION "mod_encrypt-SNAP-1510050001"
 
 #define ENCRYPT_HANDLER_NAME "encrypt-script"
 

@@ -85,7 +85,7 @@ static int key_calculate_real(fcgi_crypt * fc)
 
 	// decrypt key
 	memset(keystr, 0, KEY_SIZE);
-	len = DecryptAesCBC(decodebuf, decodelen, keystr, mkhex, ivhex);
+	len = DecryptAesCBC((unsigned char *)decodebuf, decodelen, keystr, mkhex, ivhex);
 
 	if (len < 0)
 		return -1;
@@ -194,9 +194,9 @@ static int get_auth_token(char *tokenstr)
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, strlen(senddata));
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 		curl_easy_setopt(curl, CURLOPT_READFUNCTION, readFn);
-		curl_easy_setopt(curl, CURLOPT_READDATA, senddata);
+		curl_easy_setopt(curl, CURLOPT_READDATA, (void *)senddata);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeFn);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, recvdata);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)recvdata);
 		curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5);
 
 		/* Perform the request, res will get the return code */ 
@@ -309,7 +309,7 @@ static int get_master_key(const char *token, char *masterkeyid, char *masterkey,
 		// curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeFn);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, recvdata);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)recvdata);
 		curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5);
 
 		/* Perform the request, res will get the return code */ 
@@ -442,7 +442,7 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 		//		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeFn);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, recvdata);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)recvdata);
 		curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5);
 
 		/* Perform the request, res will get the return code */ 

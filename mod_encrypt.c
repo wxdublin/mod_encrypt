@@ -840,8 +840,12 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 			}
 
 			ap_table_unset(r->err_headers_out, "X-Scal-Usermd");
-			ap_table_add(r->err_headers_out, "X-Scal-Usermd", usermdStr);
 
+			if (usermdLen > 0)
+			{
+				ap_table_add(r->err_headers_out, "X-Scal-Usermd", usermdStr);
+			}
+			
 			sprintf(logdata, "masterKeyId: %s dataKeyId: %s usermd: %s ", \
 				fr->decryptor.masterKeyId, fr->decryptor.dataKeyId, usermdStr);
 			log_message(ENCRYPT_LOG_TRACK, logdata);

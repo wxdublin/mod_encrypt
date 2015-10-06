@@ -6,7 +6,6 @@
 #ifndef WIN32
 #include <unistd.h>
 #endif
-
 #include "fcgi.h"
 #include "memcache.h"
 #include "json.h"
@@ -15,6 +14,7 @@
 #include "base64.h"
 #include "aes256cbc.h"
 #include "log.h"
+
 
 //////////////////////////////////////////////////////////////////////////
 /**
@@ -35,7 +35,7 @@ static int key_calculate_real(fcgi_crypt * fc)
 
 	keyencbase64 = fc->encryptedDataKey;
 
-	// string -> hex of master key
+	// string -> hex of master key 
 	memset(mkhex, 0, 32);
 	len = strlen(fc->masterKey)&0xFFFFFFFE;
 	for (i=0; i<len; i+=2)
@@ -85,7 +85,7 @@ static int key_calculate_real(fcgi_crypt * fc)
 
 	// decrypt key
 	memset(keystr, 0, KEY_SIZE);
-	len = DecryptAesCBC(decodebuf, decodelen, keystr, mkhex, ivhex);
+	len = DecryptAesCBC((unsigned char *)decodebuf, decodelen, keystr, mkhex, ivhex);
 
 	if (len < 0)
 		return -1;
@@ -194,9 +194,9 @@ static int get_auth_token(char *tokenstr)
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, strlen(senddata));
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 		curl_easy_setopt(curl, CURLOPT_READFUNCTION, readFn);
-		curl_easy_setopt(curl, CURLOPT_READDATA, senddata);
+		curl_easy_setopt(curl, CURLOPT_READDATA, (void *)senddata);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeFn);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, recvdata);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)recvdata);
 		curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5);
 
 		/* Perform the request, res will get the return code */ 
@@ -301,7 +301,7 @@ static int get_master_key(const char *token, char *masterkeyid, char *masterkey,
 		sprintf(serverurl, "http://%s/master/key", fcgi_masterkeyserver);
 
 	curl_global_init(CURL_GLOBAL_DEFAULT);
-
+ 
 	curl = curl_easy_init();
 	if(curl) {
 		curl_easy_setopt(curl, CURLOPT_URL, serverurl);
@@ -309,7 +309,7 @@ static int get_master_key(const char *token, char *masterkeyid, char *masterkey,
 		// curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeFn);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, recvdata);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)recvdata);
 		curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5);
 
 		/* Perform the request, res will get the return code */ 
@@ -442,7 +442,7 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 		//		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeFn);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, recvdata);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)recvdata);
 		curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5);
 
 		/* Perform the request, res will get the return code */ 
@@ -679,8 +679,8 @@ KEY_ERROR:
  * first read the keys from key server and store into memcache
  */
 
-static apr_pool_t *ThreadPool = NULL;
-static apr_thread_t *Thread = NULL;
+static apr_pool_t *gThreadPool = NULL;
+static apr_thread_t *gThread = NULL;
 int key_thread_init(void)
 {
 	int ret = 0;
@@ -688,7 +688,7 @@ int key_thread_init(void)
 	apr_status_t rv;
 
 	// if already inited
-	if (Thread != NULL)
+	if (gThread != NULL)
 		return 0;
 	
 	// check parameters
@@ -698,20 +698,20 @@ int key_thread_init(void)
 	}
 
 	// create key thread
-	if (ThreadPool)
+	if (gThreadPool)
 	{
-		apr_pool_destroy(ThreadPool);
-		ThreadPool = NULL;
+		apr_pool_destroy(gThreadPool);
+		gThreadPool = NULL;
 	}
 
-	apr_pool_create(&ThreadPool, NULL);
-	apr_threadattr_create(&thread_attr, ThreadPool);
-	rv = apr_thread_create(&Thread, thread_attr, key_thread_func, NULL, ThreadPool);
+	apr_pool_create(&gThreadPool, NULL);
+	apr_threadattr_create(&thread_attr, gThreadPool);
+	rv = apr_thread_create(&gThread, thread_attr, key_thread_func, NULL, gThreadPool);
 	if (rv != APR_SUCCESS)
 	{
 		ret = -1;
 	}
-	apr_thread_detach(Thread);
+	apr_thread_detach(gThread);
 
 	return ret;
 }

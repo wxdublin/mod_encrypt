@@ -309,7 +309,6 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
 		int mkidlen, dkidlen;
 		char headerbuff[8];
 		int headerlen, totallen;
-		char logdata[BUF_SIZE];
 
 		mkidlen = strlen(fr->encryptor.masterKeyId);
 		dkidlen = strlen(fr->encryptor.dataKeyId);
@@ -353,8 +352,7 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env)
 
 		charCount = fcgi_buf_add_block(fr->serverOutputBuffer, encapbuff, encaplen);
 
-		sprintf(logdata, "sending X-Scal-Usermd: %s", encapbuff);
-		log_message(ENCRYPT_LOG_TRACK, logdata);
+		log_message(ENCRYPT_LOG_TRACK, "sending X-Scal-Usermd:", encapbuff, NULL, NULL);
 
 		free(encapbuff);
 

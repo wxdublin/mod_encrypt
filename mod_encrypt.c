@@ -335,37 +335,31 @@ static apcb_t init_module(server_rec *s, pool *p)
 
 	{
 		int ret;
-		char logdata[1024];
 
 		// Initialize memcache
 		ret = memcache_init(fcgi_memcached_server, fcgi_memcached_port);
 		if (ret < 0)
 		{
-			sprintf(logdata, "Could not init to memcached server");
-			log_message(ENCRYPT_LOG_ERROR, logdata);
+			log_message(ENCRYPT_LOG_ERROR, "Could not init to memcached server", NULL, NULL, NULL);
 		}
 		else if (ret == 1)
 		{
-			sprintf(logdata, "Already inited server");
-			log_message(ENCRYPT_LOG_INFO, logdata);
+			log_message(ENCRYPT_LOG_WARNING, "Already inited server", NULL, NULL, NULL);
 		}
 		else
 		{
-			sprintf(logdata, "Inited memcached server");
-			log_message(ENCRYPT_LOG_INFO, logdata);
+			log_message(ENCRYPT_LOG_INFO, "Inited memcached server", NULL, NULL, NULL);
 		}
 
 		// init key thread
 		ret = key_thread_init();
 		if (ret < 0)
 		{
-			sprintf(logdata, "Could not init key thread, please check parameters and server addresses");
-			log_message(ENCRYPT_LOG_ERROR, logdata);
+			log_message(ENCRYPT_LOG_ERROR, "Could not init key thread, please check parameters and server addresses", NULL, NULL, NULL);
 		}
 		else
 		{
-			sprintf(logdata, "Started key thread");
-			log_message(ENCRYPT_LOG_INFO, logdata);
+			log_message(ENCRYPT_LOG_INFO, "Started key thread", NULL, NULL, NULL);
 		}
 	}
 
@@ -432,32 +426,27 @@ static void fcgi_child_init(server_rec *dc, pool *p)
 	/* Initialize Memcache and Key Thread */
 	{
 		int ret;
-		char logdata[1024];
 
 		// Initialize memcache
 		ret = memcache_init(fcgi_memcached_server, fcgi_memcached_port);
 		if (ret < 0)
 		{
-			sprintf(logdata, "Could not init to memcached server");
-			log_message(ENCRYPT_LOG_ERROR, logdata);
+			log_message(ENCRYPT_LOG_ERROR, "Could not init to memcached server", NULL, NULL, NULL);
 		}
 		else
 		{
-			sprintf(logdata, "Inited memcached server");
-			log_message(ENCRYPT_LOG_INFO, logdata);
+			log_message(ENCRYPT_LOG_INFO, "Inited memcached server", NULL, NULL, NULL);
 		}
 
 		// init key thread
 		ret = key_thread_init();
 		if (ret < 0)
 		{
-			sprintf(logdata, "Could not init key thread, please check parameters and server addresses");
-			log_message(ENCRYPT_LOG_ERROR, logdata);
+			log_message(ENCRYPT_LOG_ERROR, "Could not init key thread, please check parameters and server addresses", NULL, NULL, NULL);
 		}
 		else
 		{
-			sprintf(logdata, "Started key thread");
-			log_message(ENCRYPT_LOG_INFO, logdata);
+			log_message(ENCRYPT_LOG_INFO, "Started key thread", NULL, NULL, NULL);
 		}
 	}
 
@@ -814,7 +803,6 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 		char *usermdStr;
 		const char *usermdMetadata;
 		int mkidLen, dkidLen, usermdLen;
-		char logdata[BUF_SIZE];
 				
 		usermdMetadata = (const char *)ap_table_get(r->err_headers_out, "X-Scal-Usermd");
 
@@ -825,8 +813,7 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 			if (!usermdStr)
 				return NULL;
 
-			sprintf(logdata, "received X-Scal-Usermd: %s", usermdMetadata);
-			log_message(ENCRYPT_LOG_TRACK, logdata);
+			log_message(ENCRYPT_LOG_TRACK, "received X-Scal-Usermd:", usermdMetadata, NULL, NULL);
 
 			mkidLen = 256; dkidLen = 256;
 			ret = decap_metadata(usermdMetadata, strlen(usermdMetadata), \
@@ -846,9 +833,7 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 				ap_table_add(r->err_headers_out, "X-Scal-Usermd", usermdStr);
 			}
 			
-			sprintf(logdata, "masterKeyId: %s dataKeyId: %s usermd: %s ", \
-				fr->decryptor.masterKeyId, fr->decryptor.dataKeyId, usermdStr);
-			log_message(ENCRYPT_LOG_TRACK, logdata);
+			log_message(ENCRYPT_LOG_TRACK, "masterKeyId:", fr->decryptor.masterKeyId, "dataKeyId:", fr->decryptor.dataKeyId);
 
 			free(usermdStr);
 
@@ -2775,7 +2760,6 @@ static int post_process_for_redirects(request_rec * const r,
 static int content_handler(request_rec *r)
 {
 	fcgi_request *fr = NULL;
-	char logdata[1024];
 	int ret;
 
 #ifdef APACHE2
@@ -2786,8 +2770,7 @@ static int content_handler(request_rec *r)
 	// log session start
 	if (r->the_request)
 	{
-		sprintf(logdata, "Session Starting : %s", r->the_request);
-		log_message(ENCRYPT_LOG_INFO, logdata);
+		log_message(ENCRYPT_LOG_INFO, "Session Starting :", r->the_request, NULL, NULL);
 	}
 
 	/* Setup a new Encrypt request */
@@ -2820,8 +2803,7 @@ HANDLER_EXIT:
 
 	if (r->the_request)
 	{
-		sprintf(logdata, "Session Ended : %s (Error Code %d)", r->the_request, ret);
-		log_message(ENCRYPT_LOG_INFO, logdata);
+		log_message(ENCRYPT_LOG_INFO, "Session Ended :", r->the_request, NULL, NULL);
 	}
 
 	return ret;

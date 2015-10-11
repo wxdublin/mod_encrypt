@@ -10,6 +10,6 @@
 #define ENCRYPT_LOG_INFO		2
 #define ENCRYPT_LOG_TRACK		3
 
-void log_message(int log_level, char *log_message);
+void log_message(int log_level, const char *key_word1, const char *log_message1, const char *key_word2, const char *log_message2);
 
 #endif // _LOG_H__

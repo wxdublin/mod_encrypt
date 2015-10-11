@@ -7,9 +7,9 @@
 #include "fcgi.h"
 #include "log.h"
 
-void log_message(int log_level, char *log_message)
+void log_message(int log_level, const char *key_word1, const char *log_message1, const char *key_word2, const char *log_message2)
 {
-	char buffer [512];
+	char buffer[128];
 
 	time_t rawtime;
 	struct tm * timeinfo;
@@ -21,10 +21,9 @@ void log_message(int log_level, char *log_message)
 	apr_pool_t *mp; 
 	apr_file_t *dest_fp = NULL; 
 	apr_size_t len;
-	char errbuf [512];
-
+	
 	// check parameter
-	if (!fcgi_logpath || !log_message)
+	if (!fcgi_logpath)
 		return;
 
 	// if log_level > log level config, do not log
@@ -41,20 +40,19 @@ void log_message(int log_level, char *log_message)
 	switch (log_level)
 	{
 	case ENCRYPT_LOG_ERROR:
-		sprintf(buffer, "%s,%03lld [ERROR] %s\n", timebuf, timestamp_msec, log_message);
+		sprintf(buffer, "\n%s,%03lld [ERROR] ", timebuf, timestamp_msec);
 		break;
 	case ENCRYPT_LOG_WARNING:
-		sprintf(buffer, "%s,%03lld [WARN]  %s\n", timebuf, timestamp_msec, log_message);
+		sprintf(buffer, "\n%s,%03lld [WARN]  ", timebuf, timestamp_msec);
 		break;
 	case ENCRYPT_LOG_INFO:
-		sprintf(buffer, "%s,%03lld [INFO]  %s\n", timebuf, timestamp_msec, log_message);
+		sprintf(buffer, "\n%s,%03lld [INFO]  ", timebuf, timestamp_msec);
 		break;
 	case ENCRYPT_LOG_TRACK:
-		sprintf(buffer, "%s,%03lld [TRACK] %s\n", timebuf, timestamp_msec, log_message);
+		sprintf(buffer, "\n%s,%03lld [TRACK] ", timebuf, timestamp_msec);
 		break;
 	default:
-		sprintf(buffer, "%s,%03lld [UNKNOWN]\n", timebuf, timestamp_msec);
-		break;
+		return;
 	}
 
 	// file operation
@@ -64,7 +62,6 @@ void log_message(int log_level, char *log_message)
 	if ((rv = apr_file_open(&dest_fp, fcgi_logpath, \
 			APR_FOPEN_CREATE | APR_FOPEN_WRITE | APR_FOPEN_APPEND | APR_FOPEN_XTHREAD | 0, \
 			APR_OS_DEFAULT, mp)) != APR_SUCCESS) {  
-		apr_strerror(rv, errbuf, sizeof(errbuf));
 		goto done;  
 	}
 
@@ -74,6 +71,44 @@ void log_message(int log_level, char *log_message)
 	rv = apr_file_write(dest_fp, buffer, &len);  
 	if (rv != APR_SUCCESS) {  
 		goto done;  
+	}
+	if (key_word1)
+	{
+		len = strlen(key_word1);
+		rv = apr_file_write(dest_fp, key_word1, &len);  
+		if (rv != APR_SUCCESS) {  
+			goto done;  
+		}
+	}
+	if (log_message1)
+	{
+		len = 1;
+		rv = apr_file_write(dest_fp, " ", &len);  
+		len = strlen(log_message1);
+		rv = apr_file_write(dest_fp, log_message1, &len);  
+		if (rv != APR_SUCCESS) {  
+			goto done;  
+		}
+	}
+	if (key_word2)
+	{
+		len = 2;
+		rv = apr_file_write(dest_fp, ", ", &len);  
+		len = strlen(key_word2);
+		rv = apr_file_write(dest_fp, key_word2, &len);  
+		if (rv != APR_SUCCESS) {  
+			goto done;  
+		}
+	}
+	if (log_message2)
+	{
+		len = 1;
+		rv = apr_file_write(dest_fp, " ", &len);  
+		len = strlen(log_message2);
+		rv = apr_file_write(dest_fp, log_message2, &len);  
+		if (rv != APR_SUCCESS) {  
+			goto done;  
+		}
 	}
 
 done:  

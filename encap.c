@@ -98,25 +98,13 @@ int encap_metadata(char *encapStr, int encapLen,
 	// add Usermd string
 	if (usermdStr)
 	{
-		char *usermdDecodeStr;
-		int usermdDecodeLen;
-
-		// decode usermd string
-		usermdDecodeLen = Base64decode_len(usermdStr);
-		if (!(usermdDecodeStr = malloc(usermdDecodeLen+1)))
-			goto ENCAP_FAILED;
-
-		keylen = Base64decode(usermdDecodeStr, usermdStr);
-
 		// add size of usermd
-		*(short *)ptr = keylen;
+		*(short *)ptr = usermdLen;
 		ptr += 2;
 
 		// add usermd
-		memcpy(ptr, usermdDecodeStr, keylen);
-		ptr += keylen;
-
-		free(usermdDecodeStr);
+		memcpy(ptr, usermdStr, usermdLen);
+		ptr += usermdLen;
 	}
 	else
 	{
@@ -239,24 +227,12 @@ int decap_metadata(const char *decapStr, int decapLen,
 
 		if (keylen > 0)
 		{
-			char *usermdEncodeStr;
-
-			if (!(usermdEncodeStr = malloc(keylen+1)))
-				goto DECAP_FAILED;
-
-			if (*(usermdLen) < Base64encode_len(keylen))
-			{
-				free(usermdEncodeStr);
-				goto DECAP_FAILED;
-			}
-
 			// get usermd
-			memcpy(usermdEncodeStr, ptr, keylen);
-			usermdEncodeStr[keylen] = 0;
+			memcpy(usermdStr, ptr, keylen);
 			ptr += keylen;
 
-			*(usermdLen) = Base64encode(usermdStr, usermdEncodeStr, keylen);
-			free(usermdEncodeStr);
+			usermdStr[keylen] = 0;
+			*(usermdLen) = keylen;
 		}
 		else
 		{

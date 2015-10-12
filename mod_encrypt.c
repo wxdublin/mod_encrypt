@@ -820,25 +820,22 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 				fr->decryptor.masterKeyId, &mkidLen, fr->decryptor.dataKeyId, &dkidLen, \
 				usermdStr, &usermdLen);
 
-			if (ret < 0) 
+			if (ret == 0) // if succeed
 			{
-				free(usermdStr);
-				return NULL;
-			}
+				ap_table_unset(r->err_headers_out, "X-Scal-Usermd");
 
-			ap_table_unset(r->err_headers_out, "X-Scal-Usermd");
+				if (usermdLen > 0)
+				{
+					ap_table_add(r->err_headers_out, "X-Scal-Usermd", usermdStr);
+				}
 
-			if (usermdLen > 0)
-			{
-				ap_table_add(r->err_headers_out, "X-Scal-Usermd", usermdStr);
+				log_message(ENCRYPT_LOG_TRACK, "masterKeyId:", fr->decryptor.masterKeyId, "dataKeyId:", fr->decryptor.dataKeyId);
+
+				CloseCrypt(&fr->decryptor);
+				InitDecrypt(&fr->decryptor);
 			}
-			
-			log_message(ENCRYPT_LOG_TRACK, "masterKeyId:", fr->decryptor.masterKeyId, "dataKeyId:", fr->decryptor.dataKeyId);
 
 			free(usermdStr);
-
-			CloseCrypt(&fr->decryptor);
-			InitDecrypt(&fr->decryptor);
 		}
 	}
 
@@ -2789,6 +2786,7 @@ static int content_handler(request_rec *r)
 	}
 
 	InitEncrypt(&fr->encryptor);
+	InitDecrypt(&fr->decryptor);
 
 	/* Process the encrypt-script request */
 	if ((ret = do_work(r, fr)) != OK)

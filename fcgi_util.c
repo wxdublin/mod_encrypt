@@ -301,7 +301,7 @@ fcgi_util_check_access(pool *tp,
 
 
 /*******************************************************************************
- * Find a Encrypt server with a matching fs_path, and if fcgi_wrapper is
+ * Find a FastCGIENC server with a matching fs_path, and if fcgi_wrapper is
  * enabled with matching uid and gid.
  */
 fcgi_server *
@@ -334,7 +334,7 @@ fcgi_util_fs_get_by_id(const char *ePath, uid_t uid, gid_t gid)
 }
 
 /*******************************************************************************
- * Find a Encrypt server with a matching fs_path, and if fcgi_wrapper is
+ * Find a FastCGIENC server with a matching fs_path, and if fcgi_wrapper is
  * enabled with matching user and group.
  */
 fcgi_server *
@@ -399,7 +399,7 @@ fcgi_util_fs_is_path_ok(pool * const p, const char * const fs_path, struct stat 
 
 
 /*******************************************************************************
- * Allocate a new Encrypt server record from pool p with default values.
+ * Allocate a new FastCGIENC server record from pool p with default values.
  */
 fcgi_server *
 fcgi_util_fs_new(pool *p)
@@ -413,6 +413,7 @@ fcgi_util_fs_new(pool *p)
     s->initStartDelay = DEFAULT_INIT_START_DELAY;
     s->restartDelay = FCGI_DEFAULT_RESTART_DELAY;
 	s->minServerLife = FCGI_DEFAULT_MIN_SERVER_LIFE;
+    s->maxFailedStarts = FCGI_DEFAULT_MAX_FAILED_STARTS;
     s->restartOnExit = FALSE;
     s->directive = APP_CLASS_UNKNOWN;
     s->processPriority = FCGI_DEFAULT_PRIORITY;
@@ -428,7 +429,7 @@ fcgi_util_fs_new(pool *p)
 }
 
 /*******************************************************************************
- * Add the server to the linked list of Encrypt servers.
+ * Add the server to the linked list of FastCGIENC servers.
  */
 void 
 fcgi_util_fs_add(fcgi_server *s)

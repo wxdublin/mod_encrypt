@@ -49,7 +49,7 @@ static int seteuid_root(void)
     int rc = seteuid(getuid());
     if (rc) {
         ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
-            "Encrypt: seteuid(0) failed");
+            "FastCGIENC: seteuid(0) failed");
     }
     return rc;
 }
@@ -59,7 +59,7 @@ static int seteuid_user(void)
     int rc = seteuid(ap_user_id);
     if (rc) {
         ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
-            "Encrypt: seteuid(%u) failed", (unsigned)ap_user_id);
+            "FastCGIENC: seteuid(%u) failed", (unsigned)ap_user_id);
     }
     return rc;
 }
@@ -67,7 +67,7 @@ static int seteuid_user(void)
 
 /*
  * Signal the process to exit.  How (or if) the process responds
- * depends on the Encrypt application library (esp. on Win32) and
+ * depends on the FastCGIENC application library (esp. on Win32) and
  * possibly application code (signal handlers and whether or not
  * SA_RESTART is on).  At any rate, we send the signal with the
  * hopes that the process will exit on its own.  Later, as we 
@@ -163,7 +163,7 @@ static void shutdown_all()
     	            /* Remove the socket file */
     	            if (unlink(s->socket_path) != 0 && errno != ENOENT) {
     	                ap_log_error(FCGI_LOG_ERR, fcgi_apache_main_server,
-    	                    "Encrypt: unlink() failed to remove socket file \"%s\" for%s server \"%s\"",
+    	                    "FastCGIENC: unlink() failed to remove socket file \"%s\" for%s server \"%s\"",
     	                    s->socket_path,
     	                    (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "", s->fs_path);
     	            }
@@ -224,7 +224,7 @@ static int init_listen_sock(fcgi_server * fs)
         errno = WSAGetLastError();  /* Not sure if this will work as expected */
 #endif
         ap_log_error(FCGI_LOG_CRIT_ERRNO, fcgi_apache_main_server,
-            "Encrypt: can't create %sserver \"%s\": socket() failed", 
+            "FastCGIENC: can't create %sserver \"%s\": socket() failed", 
             (fs->directive == APP_CLASS_DYNAMIC) ? "(dynamic) " : "",
             fs->fs_path);
         return -1;
@@ -255,7 +255,7 @@ static int init_listen_sock(fcgi_server * fs)
             ((struct sockaddr_in *)fs->socket_addr)->sin_port);
 
         ap_log_error(FCGI_LOG_CRIT_ERRNO, fcgi_apache_main_server,
-            "Encrypt: can't create %sserver \"%s\": bind() failed [%s]", 
+            "FastCGIENC: can't create %sserver \"%s\": bind() failed [%s]", 
             (fs->directive == APP_CLASS_DYNAMIC) ? "(dynamic) " : "",
             fs->fs_path,
 #ifndef WIN32
@@ -271,7 +271,7 @@ static int init_listen_sock(fcgi_server * fs)
         && chmod(((struct sockaddr_un *)fs->socket_addr)->sun_path, S_IRUSR | S_IWUSR))
     {
         ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
-            "Encrypt: can't create %sserver \"%s\": chmod() of socket failed", 
+            "FastCGIENC: can't create %sserver \"%s\": chmod() of socket failed", 
             (fs->directive == APP_CLASS_DYNAMIC) ? "(dynamic) " : "",
             fs->fs_path);
     }
@@ -284,7 +284,7 @@ static int init_listen_sock(fcgi_server * fs)
         errno = WSAGetLastError();
 #endif
         ap_log_error(FCGI_LOG_CRIT_ERRNO, fcgi_apache_main_server,
-            "Encrypt: can't create %sserver \"%s\": listen() failed", 
+            "FastCGIENC: can't create %sserver \"%s\": listen() failed", 
             (fs->directive == APP_CLASS_DYNAMIC) ? "(dynamic) " : "",
             fs->fs_path);
     }
@@ -309,12 +309,12 @@ static int init_listen_sock(fcgi_server * fs)
  *
  * pm_main
  *
- *      The Encrypt process manager, which runs as a separate
+ *      The FastCGIENC process manager, which runs as a separate
  *      process responsible for:
- *        - Starting all the Encrypt proceses.
+ *        - Starting all the FastCGIENC proceses.
  *        - Restarting any of these processes that die (indicated
  *          by SIGCHLD).
- *        - Catching SIGTERM and relaying it to all the Encrypt
+ *        - Catching SIGTERM and relaying it to all the FastCGIENC
  *          processes before exiting.
  *
  * Inputs:
@@ -414,7 +414,7 @@ static pid_t spawn_fs_process(fcgi_server *fs, ServerProcess *process)
         dup2(fs->listenFd, FCGI_LISTENSOCK_FILENO);
 
     /* Close all other open fds, except stdout/stderr.  Leave these two open so
-     * Encrypt applications don't have to find and fix ALL 3rd party libs that
+     * FastCGIENC applications don't have to find and fix ALL 3rd party libs that
      * write to stdout/stderr inadvertantly.  For now, just leave 'em open to the
      * main server error_log - @@@ provide a directive control where this goes.
      */
@@ -474,7 +474,7 @@ NO_SUEXEC:
     failedSysCall = "execle()";
 
 FailedSystemCallExit:
-    fprintf(stderr, "Encrypt: can't start server \"%s\" (pid %ld), %s failed: %s\n",
+    fprintf(stderr, "FastCGIENC: can't start server \"%s\" (pid %ld), %s failed: %s\n",
         fs->fs_path, (long) getpid(), failedSysCall, strerror(errno));
     exit(-1);
 
@@ -505,7 +505,7 @@ FailedSystemCallExit:
     if (cgi_build_command == NULL) 
     {
         ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
-            "Encrypt: can't exec server \"%s\", mod_cgi isn't loaded", 
+            "FastCGIENC: can't exec server \"%s\", mod_cgi isn't loaded", 
             fs->fs_path);
         return 0;
     }
@@ -543,7 +543,7 @@ FailedSystemCallExit:
         if (listen_handle == INVALID_HANDLE_VALUE) 
         {
             ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
-                "Encrypt: can't exec server \"%s\", CreateNamedPipe() failed", 
+                "FastCGIENC: can't exec server \"%s\", CreateNamedPipe() failed", 
                 fs->fs_path);
             goto CLEANUP;
         }
@@ -565,7 +565,7 @@ FailedSystemCallExit:
     if (rv != APR_SUCCESS) 
     {
         ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
-            "Encrypt: don't know how to spawn cmd child process: %s", 
+            "FastCGIENC: don't know how to spawn cmd child process: %s", 
             fs->fs_path);
         goto CLEANUP;
     }
@@ -643,7 +643,7 @@ CLEANUP:
     if (process->terminationEvent == NULL)
     {
         ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
-            "Encrypt: can't create termination event for server \"%s\", "
+            "FastCGIENC: can't create termination event for server \"%s\", "
             "CreateEvent() failed", fs->fs_path);
         goto CLEANUP;
     }
@@ -668,7 +668,7 @@ CLEANUP:
         if (listen_handle == INVALID_HANDLE_VALUE) 
         {
             ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
-                "Encrypt: can't exec server \"%s\", CreateNamedPipe() failed", fs->fs_path);
+                "FastCGIENC: can't exec server \"%s\", CreateNamedPipe() failed", fs->fs_path);
             goto CLEANUP;
         }
     }
@@ -691,7 +691,7 @@ CLEANUP:
 
     if (fileType == eFileTypeUNKNOWN) {
         ap_log_error(FCGI_LOG_ERR_NOERRNO, fcgi_apache_main_server,
-            "Encrypt: %s is not executable; ensure interpreted scripts have "
+            "FastCGIENC: %s is not executable; ensure interpreted scripts have "
             "\"#!\" as their first line", 
             fs->fs_path);
         ap_destroy_pool(tp);
@@ -803,7 +803,7 @@ static void reduce_privileges(void)
 
         if (ent == NULL) {
             ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
-                "Encrypt: process manager exiting, getpwuid(%u) couldn't determine user name, "
+                "FastCGIENC: process manager exiting, getpwuid(%u) couldn't determine user name, "
                 "you probably need to modify the User directive", (unsigned)uid);
             exit(1);
         }
@@ -815,7 +815,7 @@ static void reduce_privileges(void)
     /* Change Group */
     if (setgid(ap_group_id) == -1) {
         ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
-            "Encrypt: process manager exiting, setgid(%u) failed", (unsigned)ap_group_id);
+            "FastCGIENC: process manager exiting, setgid(%u) failed", (unsigned)ap_group_id);
         exit(1);
     }
 
@@ -824,7 +824,7 @@ static void reduce_privileges(void)
     /* Initialize supplementary groups */
     if (initgroups(name, ap_group_id) == -1) {
         ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
-            "Encrypt: process manager exiting, initgroups(%s,%u) failed",
+            "FastCGIENC: process manager exiting, initgroups(%s,%u) failed",
             name, (unsigned)ap_group_id);
         exit(1);
     }
@@ -834,14 +834,14 @@ static void reduce_privileges(void)
     if (fcgi_wrapper) {
         if (seteuid_user() == -1) {
             ap_log_error(FCGI_LOG_ALERT_NOERRNO, fcgi_apache_main_server,
-                "Encrypt: process manager exiting, failed to reduce privileges");
+                "FastCGIENC: process manager exiting, failed to reduce privileges");
             exit(1);
         }
     }
     else {
         if (setuid(ap_user_id) == -1) {
             ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
-                "Encrypt: process manager exiting, setuid(%u) failed", (unsigned)ap_user_id);
+                "FastCGIENC: process manager exiting, setuid(%u) failed", (unsigned)ap_user_id);
             exit(1);
         }
     }
@@ -873,7 +873,7 @@ static void schedule_start(fcgi_server *s, int proc)
     s->procs[proc].state = FCGI_START_STATE;
     if (proc == dynamicMaxClassProcs - 1) {
         ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
-            "Encrypt: scheduled the %sstart of the last (dynamic) server "
+            "FastCGIENC: scheduled the %sstart of the last (dynamic) server "
             "\"%s\" process: reached dynamicMaxClassProcs (%d)",
             s->procs[proc].pid ? "re" : "", s->fs_path, dynamicMaxClassProcs);
     }
@@ -948,10 +948,10 @@ static void dynamic_read_msgs(int read_ready)
     if (rc <= 0) {
         if (!caughtSigTerm) {
             ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server, 
-                "Encrypt: read() from pipe failed (%d)", rc);
+                "FastCGIENC: read() from pipe failed (%d)", rc);
             if (rc == 0) {
                 ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server, 
-                    "Encrypt: the PM is shutting down, Apache seems to have disappeared - bye");
+                    "FastCGIENC: the PM is shutting down, Apache seems to have disappeared - bye");
                 caughtSigTerm = TRUE;
             }
         }
@@ -972,7 +972,7 @@ static void dynamic_read_msgs(int read_ready)
     if (rc != WAIT_OBJECT_0 && rc != WAIT_ABANDONED) 
     {
         ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
-            "Encrypt: failed to aquire the dynamic mbox mutex - something is broke?!");
+            "FastCGIENC: failed to aquire the dynamic mbox mutex - something is broke?!");
         return;
     }
 
@@ -982,7 +982,7 @@ static void dynamic_read_msgs(int read_ready)
     if (! ReleaseMutex(fcgi_dynamic_mbox_mutex)) 
     {
         ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
-            "Encrypt: failed to release the dynamic mbox mutex - something is broke?!");
+            "FastCGIENC: failed to release the dynamic mbox mutex - something is broke?!");
     }
 
     cjob = joblist;
@@ -1048,7 +1048,7 @@ static void dynamic_read_msgs(int read_ready)
 
         if (scan_failed) {
             ap_log_error(FCGI_LOG_ERR_NOERRNO, fcgi_apache_main_server,
-                "Encrypt: bogus message, sscanf() failed: \"%s\"", ptr1);
+                "FastCGIENC: bogus message, sscanf() failed: \"%s\"", ptr1);
             goto NextJob;
         }
 #else
@@ -1077,7 +1077,7 @@ static void dynamic_read_msgs(int read_ready)
             if (mutex == NULL)
             {
                 ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
-                    "Encrypt: can't create accept mutex "
+                    "FastCGIENC: can't create accept mutex "
                     "for (dynamic) server \"%s\"", cjob->fs_path);
                 goto BagNewServer;
             }
@@ -1134,7 +1134,7 @@ static void dynamic_read_msgs(int read_ready)
                                           &s->socket_addr_len, s->socket_path);
             if (err) {
                 ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
-                    "Encrypt: can't create (dynamic) server \"%s\": %s", execName, err);
+                    "FastCGIENC: can't create (dynamic) server \"%s\": %s", execName, err);
                 goto BagNewServer;
             }
 
@@ -1150,7 +1150,7 @@ static void dynamic_read_msgs(int read_ready)
 
                     if (!pw) {
                         ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
-                            "Encrypt: can't create (dynamic) server \"%s\": can't get uid/gid for wrapper: getpwnam(%s) failed",
+                            "FastCGIENC: can't create (dynamic) server \"%s\": can't get uid/gid for wrapper: getpwnam(%s) failed",
                             execName, &user[1]);
                         goto BagNewServer;
                     }
@@ -1168,7 +1168,7 @@ static void dynamic_read_msgs(int read_ready)
                     pw = getpwuid(s->uid);
                     if (!pw) {
                         ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
-                            "Encrypt: can't create (dynamic) server \"%s\": can't get uid/gid for wrapper: getwpuid(%ld) failed",
+                            "FastCGIENC: can't create (dynamic) server \"%s\": can't get uid/gid for wrapper: getwpuid(%ld) failed",
                             execName, (long)s->uid);
                         goto BagNewServer;
                     }
@@ -1230,7 +1230,7 @@ static void dynamic_read_msgs(int read_ready)
                     if (do_restart)
                     {
                         ap_log_error(FCGI_LOG_WARN_NOERRNO, 
-                            fcgi_apache_main_server, "Encrypt: restarting "
+                            fcgi_apache_main_server, "FastCGIENC: restarting "
                             "old server \"%s\" processes, newer version "
                             "found", app_path);
                     }
@@ -1319,7 +1319,7 @@ static void dynamic_read_msgs(int read_ready)
                      * to increase ProcessSlack parameter
                      */
                     ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
-                        "Encrypt: can't schedule the start of another (dynamic) server \"%s\" process: "
+                        "FastCGIENC: can't schedule the start of another (dynamic) server \"%s\" process: "
                         "exceeded dynamicMaxProcs (%d)", s->fs_path, dynamicMaxProcs);
                     goto NextJob;
                 }
@@ -1387,7 +1387,7 @@ BagNewServer:
 #ifndef WIN32
     if (ptr1 == buf) {
         ap_log_error(FCGI_LOG_ERR_NOERRNO, fcgi_apache_main_server,
-            "Encrypt: really bogus message: \"%s\"", ptr1);
+            "FastCGIENC: really bogus message: \"%s\"", ptr1);
         ptr1 += strlen(buf);
     }
             
@@ -1405,7 +1405,7 @@ BagNewServer:
  *
  * dynamic_kill_idle_fs_procs
  *
- *      Implement a kill policy for the dynamic Encrypt applications.
+ *      Implement a kill policy for the dynamic FastCGIENC applications.
  *      We also update the data structures to reflect the changes.
  *
  * Side effects:
@@ -1507,7 +1507,7 @@ static void dynamic_kill_idle_fs_procs(void)
             if (youngest != -1)
             {
                 ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
-                    "Encrypt: (dynamic) server \"%s\" (pid %ld) termination signaled",
+                    "FastCGIENC: (dynamic) server \"%s\" (pid %ld) termination signaled",
                     s->fs_path, (long) s->procs[youngest].pid);
 
                 fcgi_kill(&s->procs[youngest], SIGTERM);
@@ -1605,7 +1605,7 @@ void child_wait_thread_main(void *dummy) {
                         }
 
                         ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
-                            "Encrypt:%s server \"%s\" (pid %d) terminated with exit with status '%d'",
+                            "FastCGIENC:%s server \"%s\" (pid %d) terminated with exit with status '%d'",
                             (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
                             s->fs_path, (long) s->procs[i].pid, exitStatus);
 
@@ -1699,7 +1699,7 @@ void fcgi_pm_main(void *dummy)
 
     if (fcgi_wrapper) {
         ap_log_error(FCGI_LOG_NOTICE_NOERRNO, fcgi_apache_main_server,
-            "Encrypt: wrapper mechanism enabled (wrapper: %s)", fcgi_wrapper);
+            "FastCGIENC: wrapper mechanism enabled (wrapper: %s)", fcgi_wrapper);
     }
 #endif
 
@@ -1724,14 +1724,14 @@ void fcgi_pm_main(void *dummy)
     if (child_wait_thread == (HANDLE) -1)
     {
         ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
-            "Encrypt: failed to create process manager's wait thread!");
+            "FastCGIENC: failed to create process manager's wait thread!");
     }
 
     ap_log_error(FCGI_LOG_NOTICE_NOERRNO, fcgi_apache_main_server,
-        "Encrypt: process manager initialized");
+        "FastCGIENC: process manager initialized");
 #else
     ap_log_error(FCGI_LOG_NOTICE_NOERRNO, fcgi_apache_main_server,
-        "Encrypt: process manager initialized (pid %ld)", (long) getpid());
+        "FastCGIENC: process manager initialized (pid %ld)", (long) getpid());
 #endif
 
     now = time(NULL);
@@ -1749,6 +1749,7 @@ void fcgi_pm_main(void *dummy)
 #endif
         unsigned int numChildren;
 		unsigned int minServerLife;
+        unsigned int maxFailedStarts;
 
         /*
          * If we came out of sigsuspend() for any reason other than
@@ -1762,7 +1763,7 @@ void fcgi_pm_main(void *dummy)
          * starting.  Compute the earliest time when the start should
          * be attempted, starting it now if the time has passed.  Also,
          * remember that we do NOT need to restart externally managed
-         * Encrypt applications.
+         * FastCGIENC applications.
          */
         for (s = fcgi_servers; s != NULL; s = s->next) 
         {
@@ -1775,6 +1776,10 @@ void fcgi_pm_main(void *dummy)
 
             minServerLife = (s->directive == APP_CLASS_DYNAMIC) 
                 ? dynamicMinServerLife 
+                : s->minServerLife;
+
+            maxFailedStarts = (s->directive == APP_CLASS_DYNAMIC) 
+                ? dynamicMaxFailedStarts
                 : s->minServerLife;
 
             for (i = 0; i < numChildren; ++i) 
@@ -1795,7 +1800,7 @@ void fcgi_pm_main(void *dummy)
                         s->procs[i].start_time = 0;
                     }
                     
-                    if (s->numFailures > MAX_FAILED_STARTS)
+                    if (maxFailedStarts && s->numFailures > maxFailedStarts)
                     {
                         time_t last_start_time = s->procs[i].start_time;
 
@@ -1804,7 +1809,7 @@ void fcgi_pm_main(void *dummy)
                             s->bad = 0;
                             s->numFailures = 0;
                             ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
-                                "Encrypt:%s server \"%s\" has remained"
+                                "FastCGIENC:%s server \"%s\" has remained"
                                 " running for more than %d seconds, its restart"
                                 " interval has been restored to %d seconds",
                                 (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
@@ -1826,11 +1831,11 @@ void fcgi_pm_main(void *dummy)
                             {
                                 s->bad = 1;
                                 ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
-                                    "Encrypt:%s server \"%s\" has failed to remain"
+                                    "FastCGIENC:%s server \"%s\" has failed to remain"
                                     " running for %d seconds given %d attempts, its restart"
                                     " interval has been backed off to %d seconds",
                                     (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
-                                    s->fs_path, minServerLife, MAX_FAILED_STARTS,
+                                    s->fs_path, minServerLife, s->maxFailedStarts,
                                     FAILED_STARTS_DELAY);
                             }
                             else
@@ -1838,7 +1843,7 @@ void fcgi_pm_main(void *dummy)
                                 s->bad = 0;
                                 s->numFailures = 0;
                                 ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
-                                    "Encrypt:%s server \"%s\" has remained"
+                                    "FastCGIENC:%s server \"%s\" has remained"
                                     " running for more than %d seconds, its restart"
                                     " interval has been restored to %d seconds",
                                     (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
@@ -1861,7 +1866,7 @@ void fcgi_pm_main(void *dummy)
                         if (s->bad) 
                         {
                             s->bad = 0;
-                            s->numFailures = MAX_FAILED_STARTS;
+                            s->numFailures = s->maxFailedStarts;
                         }
 
                         if (s->listenFd < 0 && init_listen_sock(s)) 
@@ -1878,7 +1883,7 @@ void fcgi_pm_main(void *dummy)
                         s->procs[i].pid = spawn_fs_process(s, &s->procs[i]);
                         if (s->procs[i].pid <= 0) {
                             ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
-                                "Encrypt: can't start%s server \"%s\": spawn_fs_process() failed",
+                                "FastCGIENC: can't start%s server \"%s\": spawn_fs_process() failed",
                                 (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
                                 s->fs_path);
 
@@ -1906,14 +1911,14 @@ void fcgi_pm_main(void *dummy)
 
                         if (fcgi_wrapper) {
                             ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
-                                "Encrypt:%s server \"%s\" (uid %ld, gid %ld) %sstarted (pid %ld)",
+                                "FastCGIENC:%s server \"%s\" (uid %ld, gid %ld) %sstarted (pid %ld)",
                                 (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
                                 s->fs_path, (long) s->uid, (long) s->gid,
                                 restart ? "re" : "", (long) s->procs[i].pid);
                         }
                         else {
                             ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
-                                "Encrypt:%s server \"%s\" %sstarted (pid %ld)",
+                                "FastCGIENC:%s server \"%s\" %sstarted (pid %ld)",
                                 (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
                                 s->fs_path, restart ? "re" : "", (long) s->procs[i].pid);
                         }
@@ -2032,13 +2037,13 @@ ChildFound:
 
             if (WIFEXITED(waitStatus)) {
                 ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
-                    "Encrypt:%s server \"%s\" (pid %ld) terminated by calling exit with status '%d'",
+                    "FastCGIENC:%s server \"%s\" (pid %ld) terminated by calling exit with status '%d'",
                     (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
                     s->fs_path, (long) childPid, WEXITSTATUS(waitStatus));
             }
             else if (WIFSIGNALED(waitStatus)) {
                 ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
-                    "Encrypt:%s server \"%s\" (pid %ld) terminated due to uncaught signal '%d' (%s)%s",
+                    "FastCGIENC:%s server \"%s\" (pid %ld) terminated due to uncaught signal '%d' (%s)%s",
                     (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
                     s->fs_path, (long) childPid, WTERMSIG(waitStatus), get_signal_text(waitStatus),
 #ifdef WCOREDUMP
@@ -2049,7 +2054,7 @@ ChildFound:
             }
             else if (WIFSTOPPED(waitStatus)) {
                 ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
-                    "Encrypt:%s server \"%s\" (pid %ld) stopped due to uncaught signal '%d' (%s)",
+                    "FastCGIENC:%s server \"%s\" (pid %ld) stopped due to uncaught signal '%d' (%s)",
                     (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
                     s->fs_path, (long) childPid, WTERMSIG(waitStatus), get_signal_text(waitStatus));
             }
@@ -2064,7 +2069,7 @@ ChildFound:
         if (dwRet == WAIT_FAILED) {
             /* There is something seriously wrong here */
             ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
-                "Encrypt: WaitForMultipleObjects() failed on event handles -- pm is shuting down");
+                "FastCGIENC: WaitForMultipleObjects() failed on event handles -- pm is shuting down");
                 bTimeToDie = TRUE;
         }
 
@@ -2103,7 +2108,7 @@ ChildFound:
         }
         else if (dwRet == TERM_EVENT) {
             ap_log_error(FCGI_LOG_INFO_NOERRNO, fcgi_apache_main_server, 
-                "Encrypt: Termination event received process manager shutting down");
+                "FastCGIENC: Termination event received process manager shutting down");
             
             bTimeToDie = TRUE;
             dwRet = WaitForSingleObject(child_wait_thread, INFINITE);
@@ -2113,7 +2118,7 @@ ChildFound:
         else {
             /* Have an received an unknown event - should not happen */
             ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
-                "Encrypt: WaitForMultipleobjects() return an unrecognized event");
+                "FastCGIENC: WaitForMultipleobjects() return an unrecognized event");
             
             bTimeToDie = TRUE;
             dwRet = WaitForSingleObject(child_wait_thread, INFINITE);
@@ -2146,7 +2151,7 @@ int fcgi_pm_add_job(fcgi_pm_job *new_job)
     if (rv != WAIT_OBJECT_0 && rv != WAIT_ABANDONED) 
     {
         ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
-            "Encrypt: failed to aquire the dynamic mbox mutex - something is broke?!");
+            "FastCGIENC: failed to aquire the dynamic mbox mutex - something is broke?!");
         return -1;
     }
 
@@ -2156,7 +2161,7 @@ int fcgi_pm_add_job(fcgi_pm_job *new_job)
     if (! ReleaseMutex(fcgi_dynamic_mbox_mutex)) 
     {
         ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
-            "Encrypt: failed to release the dynamic mbox mutex - something is broke?!");
+            "FastCGIENC: failed to release the dynamic mbox mutex - something is broke?!");
     }
 
     return 0;

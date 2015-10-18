@@ -35,7 +35,7 @@ typedef struct {
 #define FCGI_VERSION_1           1
 
 /*
- * Current version of the Encrypt protocol
+ * Current version of the FastCGIENC protocol
  */
 #define FCGI_VERSION FCGI_VERSION_1
 

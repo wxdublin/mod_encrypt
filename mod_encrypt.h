@@ -1,16 +1,16 @@
 /*
- * $Id: mod_encrypt.h,v 1.55 2015/10/05 00:31:55 robs Exp $
+ * $Id: mod_encrypt.h,v 1.55 2009/09/29 00:31:55 robs Exp $
  */
 
 #ifndef MOD_ENCRYPT_H
 #define MOD_ENCRYPT_H
 
-#define MOD_ENCRYPT_VERSION "mod_encrypt-SNAP-1510050001"
+#define MOD_ENCRYPT_VERSION "mod_encrypt-SNAP-0910052141"
 
-#define ENCRYPT_HANDLER_NAME "encrypt-script"
+#define FASTCGIENC_HANDLER_NAME "encrypt-script"
 
 /*
- * # of idle seconds allowed to pass while connected to a Encrypt before aborting
+ * # of idle seconds allowed to pass while connected to a FastCGIENC before aborting
  */
 #define FCGI_DEFAULT_IDLE_TIMEOUT 30
 
@@ -25,7 +25,7 @@
 /* 
  * [WIN32] The number of millisecs to wait after having signaled the 
  * termination event to its applications before issuing a TerminateProcess().
- * If all of the applications are based on a version of the Encrypt 
+ * If all of the applications are based on a version of the FastCGIENC 
  * application library that properly handles the shutdown event
  * (fcgi2 v2.2.4), this can be set to <= 0 to prevent the use of
  * TerminateProcess() entirely.  If none of the applications support the
@@ -39,7 +39,7 @@
  * The number of failed starts that can occur before the application is
  * considered broken and start attempts fall back to FAILED_STARTS_DELAY.
  */
-#define MAX_FAILED_STARTS 3
+#define FCGI_DEFAULT_MAX_FAILED_STARTS 3
 
 /*
  * The number of seconds between attempts to start an application that 
@@ -55,15 +55,15 @@
                                               wait before restarting */
 #define MAX_INIT_ENV_VARS 64               /* max # of -initial-env options */
 
-/* max number of chars in a line of stderr we can handle from a Encrypt Server */
+/* max number of chars in a line of stderr we can handle from a FastCGIENC Server */
 #define FCGI_SERVER_MAX_STDERR_LINE_LEN 1023     
 
 /* size of the buffer the PM uses to read records from the request handlers */
 #define FCGI_MSGS_BUFSIZE  32 * 512
 
-#define SERVER_BUFSIZE (8192*1024)
+#define SERVER_BUFSIZE 8192
 
-/* Dynamic Encrypt applications */
+/* Dynamic FastCGIENC applications */
 #define FCGI_DEFAULT_MAX_PROCS  50         /* maximum number of processes that
                                             * are allowed to run on system */
 #define FCGI_DEFAULT_MIN_PROCS  5          /* minimum number of processes that
@@ -100,7 +100,7 @@
                                             * seconds a server must stay alive
                                             * before it's considered broken. */
 /*
- * # of sec to wait in a non-blocking connect() to the Encrypt application 
+ * # of sec to wait in a non-blocking connect() to the FastCGIENC application 
  * before aborting the request, or 0 to indicate that blocking connect()s 
  * should be used.  Non-blocking connect()s are problematic on many platforms.
  */
@@ -116,7 +116,7 @@
                                             * disk is changed. */
 
 /*
- * Should data recieved from the Encrypt server be immediately flushed to
+ * Should data recieved from the FastCGIENC server be immediately flushed to
  * the client?  Default: FALSE
  */
 #define FCGI_FLUSH	FALSE
@@ -126,17 +126,17 @@
 /* # of millisecs to wait on the mbox mutex */
 #define FCGI_MBOX_MUTEX_TIMEOUT 5000
 
-#define DEFAULT_SOCK_DIR "\\\\.\\pipe\\Encrypt\\"
+#define DEFAULT_SOCK_DIR "\\\\.\\pipe\\FastCGIENC\\"
 
 #elif defined(APACHE2)
 
 /* Default dir for Unix/Domain sockets */
-#define DEFAULT_SOCK_DIR  DEFAULT_REL_RUNTIMEDIR "/encrypt"
+#define DEFAULT_SOCK_DIR  DEFAULT_REL_RUNTIMEDIR "/fastcgi"
 
 #else /* !WIN32 && !APACHE2 */
 
 /* Default dir for Unix/Domain sockets */
-#define DEFAULT_SOCK_DIR "logs/encrypt"
+#define DEFAULT_SOCK_DIR "logs/fastcgi"
 
 #endif
 
@@ -182,6 +182,22 @@
 #define MAX_USER_NAME_LEN 15     /* Max len of user name (suexec w/ ~user), */
 #endif                           /* must accomodate uid printed as %ld too */
 #define MAX_GID_CHAR_LEN 15      /* Max #chars in a gid printed as %ld */
+
+#ifndef TRUE
+#define TRUE  (1)
+#endif
+
+#ifndef FALSE
+#define FALSE (0)
+#endif
+
+#ifndef min
+#define min(a,b) ((a) < (b) ? (a) : (b))
+#endif
+
+#ifndef max
+#define max(a,b) ((a) > (b) ? (a) : (b))
+#endif
 
 #ifdef APACHE2
 

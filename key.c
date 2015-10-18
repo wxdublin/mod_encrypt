@@ -606,7 +606,7 @@ int key_old_request(fcgi_crypt * fc)
 	ret = key_calculate_real(fc);
 	if (ret == 0)
 	{
-		memcache_set_timeout(dataKeyCacheName, fc->dataKey, KEY_STORE_PERIOD);
+		memcache_set(dataKeyCacheName, fc->dataKey, KEY_STORE_PERIOD);
 	}
 
 	return ret;

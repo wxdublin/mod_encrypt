@@ -73,7 +73,7 @@ void CloseCrypt(fcgi_crypt * cryptor)
 /*******************************************************************************
  * Encrypt any data by AES ctr encryption algorithm
  */ 
-void CryptDataStream(fcgi_crypt * cryptor, char *data, int offset, int len)
+void CryptDataStream_(fcgi_crypt * cryptor, char *data, int offset, int len)
 {
 	int i;
 	int block_cnt, block_offset, block_size;
@@ -109,6 +109,32 @@ void CryptDataStream(fcgi_crypt * cryptor, char *data, int offset, int len)
 		CryptAesCtr(ctx, (unsigned char *)&data[block_offset], block_size, (unsigned char *)&data[block_offset]);
 	
 	free(buff);
+
+	return;
+}
+
+void CryptDataStream(fcgi_crypt * cryptor, char *data, int offset, int len)
+{
+	EVP_CIPHER_CTX *ctx;
+	char buff[BUF_SIZE];
+
+	// check parameters
+	if (!cryptor || !data || ((offset+len) <= 0))
+		return;
+	
+	ctx = (EVP_CIPHER_CTX *)cryptor->crypt;
+	while (offset > BUF_SIZE)
+	{
+		memset(buff, 0, BUF_SIZE);
+		CryptAesCtr(ctx, buff, BUF_SIZE, buff);
+		offset -= BUF_SIZE;
+	}
+	if (offset > 0)
+	{
+		CryptAesCtr(ctx, buff, offset, buff);
+	}
+
+	CryptAesCtr(ctx, data, len, data);
 
 	return;
 }

@@ -9,16 +9,17 @@
 
 #include <limits.h>
 #include "mpm_common.h"     /* ap_uname2id, ap_gname2id */
-#include "log.h"
 
 #ifdef WIN32
 #include <direct.h>
-#else 
+#else
 #include <unistd.h>
 #include "unixd.h"
 #endif
 
 #endif
+
+#include "log.h"
 
 #ifdef WIN32
 /* warning C4100: unreferenced formal parameter */
@@ -57,7 +58,7 @@ static const char *get_host_n_port(pool *p, const char **arg,
 
     return NULL;
 }
-
+
 /*******************************************************************************
  * Get the next configuration directive argument, & return an u_short.
  * The pool arg should be temporary storage.
@@ -214,7 +215,7 @@ static const char *invalid_value(pool *p, const char *cmd, const char *id,
 /*******************************************************************************
  * Set/Reset the uid/gid that Apache and the PM will run as.  This is ap_user_id
  * and ap_group_id if we're started as root, and euid/egid otherwise.  Also try
- * to check that the config files don't set the User/Group after a Encrypt
+ * to check that the config files don't set the User/Group after a FastCGIENC
  * directive is used that depends on it.
  */
 /*@@@ To be complete, we should save a handle to the server each AppClass is
@@ -247,7 +248,7 @@ const char *fcgi_config_set_fcgi_uid_n_gid(int set)
     }
 
     if (isSet && (uid != fcgi_user_id || gid != fcgi_group_id)) {
-        return "User/Group commands must preceed Encrypt server definitions";
+        return "User/Group commands must preceed FastCGIENC server definitions";
     }
 
     isSet = 1;
@@ -289,12 +290,10 @@ apcb_t fcgi_config_reset_globals(void* dummy)
     dynamicInitStartDelay = DEFAULT_INIT_START_DELAY;
     dynamicRestartDelay = FCGI_DEFAULT_RESTART_DELAY;
     dynamicMinServerLife = FCGI_DEFAULT_MIN_SERVER_LIFE;
+    dynamicMaxFailedStarts = FCGI_DEFAULT_MAX_FAILED_STARTS;
     dynamic_pass_headers = NULL;
     dynamic_idle_timeout = FCGI_DEFAULT_IDLE_TIMEOUT;
 	dynamicFlush = FCGI_FLUSH;
-
-	fcgi_encrypt = TRUE;
-	fcgi_decrypt = TRUE;
 
 #ifndef WIN32
 	/* Close any old pipe (HUP/USR1) */
@@ -418,8 +417,7 @@ const char *fcgi_config_make_dynamic_dir(pool *p, const int wax)
 #else /* !APACHE2 */
     {
         DIR *dp;
-        struct d
-			irent *dirp = NULL;
+        struct dirent *dirp = NULL;
 
         tp = ap_make_sub_pool(p);
 
@@ -477,7 +475,7 @@ const char *fcgi_config_set_socket_dir(cmd_parms *cmd, void *dummy, const char *
 
     if (fcgi_servers != NULL) {
         return ap_psprintf(tp,
-            "The %s command must preceed static Encrypt server definitions",
+            "The %s command must preceed static FastCGIENC server definitions",
             name);
     }
 
@@ -517,10 +515,10 @@ const char *fcgi_config_set_socket_dir(cmd_parms *cmd, void *dummy, const char *
 
     return NULL;
 }
-
+
 /*******************************************************************************
  * Enable, disable, or specify the path to a wrapper used to invoke all
- * Encrypt applications.
+ * FastCGIENC applications.
  */
 const char *fcgi_config_set_wrapper(cmd_parms *cmd, void *dummy, const char *arg)
 {
@@ -552,7 +550,7 @@ const char *fcgi_config_set_wrapper(cmd_parms *cmd, void *dummy, const char *arg
 
     if (fcgi_servers != NULL) {
         return ap_psprintf(tp,
-            "The %s command must preceed static Encrypt server definitions", name);
+            "The %s command must preceed static FastCGIENC server definitions", name);
     }
 
     if (strcasecmp(arg, "Off") == 0) {
@@ -591,196 +589,7 @@ const char *fcgi_config_set_wrapper(cmd_parms *cmd, void *dummy, const char *arg
 }
 
 /*******************************************************************************
- * Configure Memcached server.
- */
-const char *fcgi_config_set_memcached(cmd_parms *cmd, void *dummy, const char *arg)
-{
-    const char *err = NULL;
-
-    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
-    if (err)
-    {
-        return err;
-    }
-
-	if ((err = get_host_n_port(cmd->pool, &arg, (const char **)&fcgi_memcached_server, &fcgi_memcached_port)))
-		return ap_psprintf(cmd->pool, "the %s directive should be IP(Hostname):Port/On", cmd->cmd->name);
-
-	return NULL;
-}
-
-/*******************************************************************************
- * Enable, disable Encrypt feature.
- */
-const char *fcgi_config_set_encrypt(cmd_parms *cmd, void *dummy, const char *arg)
-{
-    const char *err = NULL;
-
-    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
-    if (err)
-    {
-        return err;
-    }
-
-    if (strcasecmp(arg, "Off") == 0) {
-        fcgi_encrypt = FALSE;
-    }
-	else if (strcasecmp(arg, "On") == 0) {
-        fcgi_encrypt = TRUE;
-    }
-    else {
-		return ap_psprintf(cmd->temp_pool, 
-			"the %s directive should be only Off/On", cmd->cmd->name);
-	}
-
-	return NULL;
-}
-
-/*******************************************************************************
- * Enable, disable Decrypt applications.
- */
-const char *fcgi_config_set_decrypt(cmd_parms *cmd, void *dummy, const char *arg)
-{
-    const char *err = NULL;
-
-    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
-    if (err)
-    {
-        return err;
-    }
-
-    if (strcasecmp(arg, "Off") == 0) {
-        fcgi_decrypt = FALSE;
-    }
-	else if (strcasecmp(arg, "On") == 0) {
-        fcgi_decrypt = TRUE;
-    }
-    else {
-		return ap_psprintf(cmd->temp_pool, 
-			"the %s directive should be only Off/On", cmd->cmd->name);
-	}
-
-	return NULL;
-}
-
-/*******************************************************************************
- * Set Sproxyd Authentication Server.
- */
-const char *fcgi_config_set_authserver(cmd_parms *cmd, void *dummy, const char *arg)
-{
-    const char *err = NULL;
-
-    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
-    if (err)
-    {
-        return err;
-    }
-
-	fcgi_authserver = ap_getword_conf(cmd->pool, &arg);
-
-	return NULL;
-}
-
-/*******************************************************************************
- * Set Sproxyd Master Key Server.
- */
-const char *fcgi_config_set_masterkeyserver(cmd_parms *cmd, void *dummy, const char *arg)
-{
-    const char *err = NULL;
-
-    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
-    if (err)
-    {
-        return err;
-    }
-
-	fcgi_masterkeyserver = ap_getword_conf(cmd->pool, &arg);
-
-	return NULL;
-}
-
-/*******************************************************************************
- * Set Sproxyd Data Key Server.
- */
-const char *fcgi_config_set_datakeyserver(cmd_parms *cmd, void *dummy, const char *arg)
-{
-    const char *err = NULL;
-
-    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
-    if (err)
-    {
-        return err;
-    }
-
-	fcgi_datakeyserver = ap_getword_conf(cmd->pool, &arg);
-
-	return NULL;
-}
-
-/*******************************************************************************
- * Set Sproxyd User Name.
- */
-const char *fcgi_config_set_username(cmd_parms *cmd, void *dummy, const char *arg)
-{
-    const char *err = NULL;
-
-    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
-    if (err)
-    {
-        return err;
-    }
-
-	fcgi_username = ap_getword_conf(cmd->pool, &arg);
-
-	return NULL;
-}
-
-/*******************************************************************************
- * Set Sproxyd User Password.
- */
-const char *fcgi_config_set_password(cmd_parms *cmd, void *dummy, const char *arg)
-{
-    const char *err = NULL;
-
-    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
-    if (err)
-    {
-        return err;
-    }
-
-	fcgi_password = ap_getword_conf(cmd->pool, &arg);
-
-	return NULL;
-}
-
-/*******************************************************************************
- * Set Sproxyd log path
- */
-const char *fcgi_config_set_logpath(cmd_parms *cmd, void *dummy, const char *arg1, const char *arg2)
-{
-    const char *err = NULL;
-
-    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
-    if (err)
-    {
-        return err;
-    }
-
-	if (arg1)
-		fcgi_logpath = ap_getword_conf(cmd->pool, &arg1);
-
-	if (arg2)
-	{
-		fcgi_loglevel = atoi(arg2);
-		if ((fcgi_loglevel < ENCRYPT_LOG_ERROR) || (fcgi_loglevel > ENCRYPT_LOG_TRACK))
-			fcgi_loglevel = ENCRYPT_LOG_ERROR;
-	}
-	
-	return NULL;
-}
-
-/*******************************************************************************
- * Configure a static FastCGI server.
+ * Configure a static FastCGIENC server.
  */
 const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const char *arg)
 {
@@ -827,14 +636,14 @@ const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const cha
     if (s != NULL) {
         if (fcgi_wrapper) {
             return ap_psprintf(tp,
-                "%s: redefinition of a previously defined Encrypt "
+                "%s: redefinition of a previously defined FastCGIENC "
                 "server \"%s\" with uid=%ld and gid=%ld",
                 name, fs_path, (long) fcgi_util_get_server_uid(cmd->server),
                 (long) fcgi_util_get_server_gid(cmd->server));
         }
         else {
             return ap_psprintf(tp,
-                "%s: redefinition of a previously defined Encrypt server \"%s\"",
+                "%s: redefinition of a previously defined FastCGIENC server \"%s\"",
                 name, fs_path);
         }
     }
@@ -852,7 +661,7 @@ const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const cha
 
 #ifdef WIN32
 
-    /* TCP Encrypt applications require SystemRoot be present in the environment
+    /* TCP FastCGIENC applications require SystemRoot be present in the environment
      * Put it in both for consistency to the application */
     fcgi_config_set_env_var(p, envp, &envc, "SystemRoot");
 
@@ -861,8 +670,8 @@ const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const cha
     if (mutex == NULL)
     {
         ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
-            "Encrypt: CreateMutex() failed");
-        return "failed to create Encrypt application accept mutex";
+            "FastCGIENC: CreateMutex() failed");
+        return "failed to create FastCGIENC application accept mutex";
     }
     
     SetHandleInformation(mutex, HANDLE_FLAG_INHERIT, TRUE);
@@ -889,6 +698,10 @@ const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const cha
         }
         else if (strcasecmp(option, "-min-server-life") == 0) {
             if ((err = get_u_int(tp, &arg, &s->minServerLife, 0)))
+                return invalid_value(tp, name, NULL, option, err);
+        }
+        else if (strcasecmp(option, "-max-failed-starts") == 0) {
+            if ((err = get_u_int(tp, &arg, &s->maxFailedStarts, 0)))
                 return invalid_value(tp, name, NULL, option, err);
         }
         else if (strcasecmp(option, "-priority") == 0) {
@@ -973,8 +786,8 @@ const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const cha
     }
     else if (s->user || s->group)
     {
-        ap_log_error(FCGI_LOG_WARN, cmd->server, "Encrypt: there is no "
-                     "encrypt wrapper set, user/group options are ignored");
+        ap_log_error(FCGI_LOG_WARN, cmd->server, "FastCGIENC: there is no "
+                     "fastcgi wrapper set, user/group options are ignored");
     }
 
     if ((err = fcgi_util_fs_set_uid_n_gid(p, s, s->uid, s->gid)))
@@ -1031,14 +844,14 @@ const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const cha
 #endif
     }
 
-    /* Add it to the list of Encrypt servers */
+    /* Add it to the list of FastCGIENC servers */
     fcgi_util_fs_add(s);
 
     return NULL;
 }
-
+
 /*******************************************************************************
- * Configure a static Encrypt server that is started/managed elsewhere.
+ * Configure a static FastCGIENC server that is started/managed elsewhere.
  */
 const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const char *arg)
 {
@@ -1166,8 +979,8 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
     }
     else if (s->user || s->group)
     {
-        ap_log_error(FCGI_LOG_WARN, cmd->server, "Encrypt: there is no "
-                     "encrypt wrapper set, user/group options are ignored");
+        ap_log_error(FCGI_LOG_WARN, cmd->server, "FastCGIENC: there is no "
+                     "fastcgi wrapper set, user/group options are ignored");
     }
 
     if ((err = fcgi_util_fs_set_uid_n_gid(p, s, s->uid, s->gid)))
@@ -1214,20 +1027,20 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
 #endif
     }
 
-    /* Add it to the list of Encrypt servers */
+    /* Add it to the list of FastCGIENC servers */
     fcgi_util_fs_add(s);
 
     return NULL;
 }
-
+
 /*
  *----------------------------------------------------------------------
  *
  * fcgi_config_set_config --
  *
- *      Implements the Encrypt FCGIConfig configuration directive.
+ *      Implements the FastCGIENC FCGIConfig configuration directive.
  *      This command adds routines to control the execution of the
- *      dynamic Encrypt processes.
+ *      dynamic FastCGIENC processes.
  *
  *
  *----------------------------------------------------------------------
@@ -1317,6 +1130,10 @@ const char *fcgi_config_set_config(cmd_parms *cmd, void *dummy, const char *arg)
             if ((err = get_int(tp, &arg, &dynamicMinServerLife, 0)))
                 return invalid_value(tp, name, NULL, option, err);
         }
+        else if (strcasecmp(option, "-max-failed-starts") == 0) {
+            if ((err = get_int(tp, &arg, &dynamicMaxFailedStarts, 0)))
+                return invalid_value(tp, name, NULL, option, err);
+        }
         else if (strcasecmp(option, "-restart-delay") == 0) {
             if ((err = get_u_int(tp, &arg, &dynamicRestartDelay, 0)))
                 return invalid_value(tp, name, NULL, option, err);
@@ -1398,7 +1215,7 @@ const char *fcgi_config_new_auth_server(cmd_parms * cmd,
     if (compat && strcasecmp(compat, "-compat"))
         return ap_psprintf(cmd->temp_pool, "%s: unknown option: \"%s\"", cmd->cmd->name, compat);
 
-    switch((int)(long)cmd->info) {
+    switch((int)cmd->info) {
         case FCGI_AUTH_TYPE_AUTHENTICATOR:
             dir_config->authenticator = auth_server;
             dir_config->authenticator_options |= (compat) ? FCGI_COMPAT : 0;
@@ -1427,4 +1244,193 @@ const char *fcgi_config_set_authoritative_slot(cmd_parms * cmd,
         *((u_char *)dir_config + offset) &= ~FCGI_AUTHORITATIVE;
 
     return NULL;
+}
+
+/*******************************************************************************
+ * Set Sproxyd log path
+ */
+const char *fcgi_config_set_logpath(cmd_parms *cmd, void *dummy, const char *arg1, const char *arg2)
+{
+    const char *err = NULL;
+
+    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
+    if (err)
+    {
+        return err;
+    }
+
+	if (arg1)
+		fcgi_logpath = ap_getword_conf(cmd->pool, &arg1);
+
+	if (arg2)
+	{
+		fcgi_loglevel = atoi(arg2);
+		if ((fcgi_loglevel < ENCRYPT_LOG_ERROR) || (fcgi_loglevel > ENCRYPT_LOG_TRACK))
+			fcgi_loglevel = ENCRYPT_LOG_ERROR;
+	}
+	
+	return NULL;
+}
+
+/*******************************************************************************
+ * Configure Memcached server.
+ */
+const char *fcgi_config_set_memcached(cmd_parms *cmd, void *dummy, const char *arg)
+{
+    const char *err = NULL;
+
+    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
+    if (err)
+    {
+        return err;
+    }
+
+	if ((err = get_host_n_port(cmd->pool, &arg, (const char **)&fcgi_memcached_server, &fcgi_memcached_port)))
+		return ap_psprintf(cmd->pool, "the %s directive should be IP(Hostname):Port/On", cmd->cmd->name);
+
+	return NULL;
+}
+
+/*******************************************************************************
+ * Enable, disable Encrypt feature.
+ */
+const char *fcgi_config_set_encrypt(cmd_parms *cmd, void *dummy, const char *arg)
+{
+    const char *err = NULL;
+
+    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
+    if (err)
+    {
+        return err;
+    }
+
+    if (strcasecmp(arg, "Off") == 0) {
+        fcgi_encrypt_flag = FALSE;
+    }
+	else if (strcasecmp(arg, "On") == 0) {
+        fcgi_encrypt_flag = TRUE;
+    }
+    else {
+		return ap_psprintf(cmd->temp_pool, 
+			"the %s directive should be only Off/On", cmd->cmd->name);
+	}
+
+	return NULL;
+}
+
+/*******************************************************************************
+ * Enable, disable Decrypt applications.
+ */
+const char *fcgi_config_set_decrypt(cmd_parms *cmd, void *dummy, const char *arg)
+{
+    const char *err = NULL;
+
+    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
+    if (err)
+    {
+        return err;
+    }
+
+    if (strcasecmp(arg, "Off") == 0) {
+        fcgi_decrypt_flag = FALSE;
+    }
+	else if (strcasecmp(arg, "On") == 0) {
+        fcgi_decrypt_flag = TRUE;
+    }
+    else {
+		return ap_psprintf(cmd->temp_pool, 
+			"the %s directive should be only Off/On", cmd->cmd->name);
+	}
+
+	return NULL;
+}
+
+/*******************************************************************************
+ * Set Sproxyd Authentication Server.
+ */
+const char *fcgi_config_set_authserver(cmd_parms *cmd, void *dummy, const char *arg)
+{
+    const char *err = NULL;
+
+    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
+    if (err)
+    {
+        return err;
+    }
+
+	fcgi_authserver = ap_getword_conf(cmd->pool, &arg);
+
+	return NULL;
+}
+
+/*******************************************************************************
+ * Set Sproxyd Master Key Server.
+ */
+const char *fcgi_config_set_masterkeyserver(cmd_parms *cmd, void *dummy, const char *arg)
+{
+    const char *err = NULL;
+
+    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
+    if (err)
+    {
+        return err;
+    }
+
+	fcgi_masterkeyserver = ap_getword_conf(cmd->pool, &arg);
+
+	return NULL;
+}
+
+/*******************************************************************************
+ * Set Sproxyd Data Key Server.
+ */
+const char *fcgi_config_set_datakeyserver(cmd_parms *cmd, void *dummy, const char *arg)
+{
+    const char *err = NULL;
+
+    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
+    if (err)
+    {
+        return err;
+    }
+
+	fcgi_datakeyserver = ap_getword_conf(cmd->pool, &arg);
+
+	return NULL;
+}
+
+/*******************************************************************************
+ * Set Sproxyd User Name.
+ */
+const char *fcgi_config_set_username(cmd_parms *cmd, void *dummy, const char *arg)
+{
+    const char *err = NULL;
+
+    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
+    if (err)
+    {
+        return err;
+    }
+
+	fcgi_username = ap_getword_conf(cmd->pool, &arg);
+
+	return NULL;
+}
+
+/*******************************************************************************
+ * Set Sproxyd User Password.
+ */
+const char *fcgi_config_set_password(cmd_parms *cmd, void *dummy, const char *arg)
+{
+    const char *err = NULL;
+
+    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
+    if (err)
+    {
+        return err;
+    }
+
+	fcgi_password = ap_getword_conf(cmd->pool, &arg);
+
+	return NULL;
 }

@@ -553,7 +553,7 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 			timeout = get_auth_token(fc.token);
 			if (timeout > 0)
 			{
-				memcache_set_timeout(CACHE_KEYNAME_AUTHTOKEN, fc.token, timeout);
+				memcache_set(CACHE_KEYNAME_AUTHTOKEN, fc.token, timeout);
 				authtimeout = timeout;
 				mktimeout = dktimeout = -1;
 			}
@@ -575,9 +575,9 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 			timeout = get_master_key(fc.token, fc.masterKeyId, fc.masterKey, fc.initializationVector);
 			if (timeout > 0)
 			{
-				memcache_set_timeout(CACHE_KEYNAME_MAKSTERKEYID, fc.masterKeyId, timeout);
-				memcache_set_timeout(CACHE_KEYNAME_MAKSTERKEY, fc.masterKey, timeout);
-				memcache_set_timeout(CACHE_KEYNAME_IV, fc.initializationVector, timeout);
+				memcache_set(CACHE_KEYNAME_MAKSTERKEYID, fc.masterKeyId, timeout);
+				memcache_set(CACHE_KEYNAME_MAKSTERKEY, fc.masterKey, timeout);
+				memcache_set(CACHE_KEYNAME_IV, fc.initializationVector, timeout);
 				mktimeout = timeout;
 				dktimeout = -1;
 			}
@@ -601,8 +601,8 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 			timeout = get_data_key(fc.token, fc.masterKeyId, fc.dataKeyId, fc.encryptedDataKey);
 			if (timeout > 0)
 			{
-				memcache_set_timeout(CACHE_KEYNAME_DATAKEYID, fc.dataKeyId, timeout);
-				memcache_set_timeout(CACHE_KEYNAME_ENCRYPTEDDATAKEY, fc.encryptedDataKey, timeout);
+				memcache_set(CACHE_KEYNAME_DATAKEYID, fc.dataKeyId, timeout);
+				memcache_set(CACHE_KEYNAME_ENCRYPTEDDATAKEY, fc.encryptedDataKey, timeout);
 				dktimeout = timeout;
 			}
 			else
@@ -624,11 +624,11 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 			char dataKeyCacheName[KEY_SIZE];
 			memset(dataKeyCacheName, 0, KEY_SIZE);
 			sprintf(dataKeyCacheName, "fastcgi-%s-%s-%s", fc.masterKeyId, fc.dataKeyId, fcgi_username);
-			memcache_set_timeout(dataKeyCacheName, fc.dataKey, KEY_STORE_PERIOD);
+			memcache_set(dataKeyCacheName, fc.dataKey, KEY_STORE_PERIOD);
 
 			if (timeout <= 0)
 				timeout = KEY_STORE_PERIOD;
-			memcache_set_timeout(CACHE_KEYNAME_DATAKEY, fc.dataKey, 60);
+			memcache_set(CACHE_KEYNAME_DATAKEY, fc.dataKey, 60);
 		}
 		else
 			goto KEY_ERROR;
@@ -658,16 +658,16 @@ KEY_ERROR:
  * first read the keys from key server and store into memcache
  */
 
-static apr_pool_t *gThreadPool = NULL;
-static apr_thread_t *gThread = NULL;
 int key_thread_init(void)
 {
 	int ret = 0;
-	apr_threadattr_t *thread_attr;
+	apr_threadattr_t *threadAttr;
 	apr_status_t rv;
+	apr_pool_t *threadPool = NULL;
+	apr_thread_t *threadD = NULL;
 
 	// if already inited
-	if (gThread != NULL)
+	if (threadD != NULL)
 		return 0;
 	
 	// check parameters
@@ -677,20 +677,20 @@ int key_thread_init(void)
 	}
 
 	// create key thread
-	if (gThreadPool)
+	if (threadPool)
 	{
-		apr_pool_destroy(gThreadPool);
-		gThreadPool = NULL;
+		apr_pool_destroy(threadPool);
+		threadPool = NULL;
 	}
 
-	apr_pool_create(&gThreadPool, NULL);
-	apr_threadattr_create(&thread_attr, gThreadPool);
-	rv = apr_thread_create(&gThread, thread_attr, key_thread_func, NULL, gThreadPool);
+	apr_pool_create(&threadPool, NULL);
+	apr_threadattr_create(&threadAttr, threadPool);
+	rv = apr_thread_create(&threadD, threadAttr, key_thread_func, NULL, threadPool);
 	if (rv != APR_SUCCESS)
 	{
 		ret = -1;
 	}
-	apr_thread_detach(gThread);
+	apr_thread_detach(threadD);
 
 	return ret;
 }

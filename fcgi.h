@@ -67,15 +67,23 @@ typedef apr_status_t apcb_t;
 #define unixd_config ap_unixd_config
 #endif
 
-#ifdef APACHE2
 #define ap_user_id        unixd_config.user_id
 #define ap_group_id       unixd_config.group_id
 #define ap_user_name      unixd_config.user_name
 #define ap_suexec_enabled unixd_config.suexec_enabled
-#endif
 
 #ifndef S_ISDIR
 #define S_ISDIR(m)      (((m)&(S_IFMT)) == (S_IFDIR))
+#endif
+
+#ifndef BOOL
+typedef int BOOL;
+#endif
+#ifndef TRUE
+#define TRUE 1
+#endif
+#ifndef FALSE
+#define FALSE 0
 #endif
 
 /* obsolete fns */
@@ -146,7 +154,7 @@ typedef void apcb_t;
 #include <sys/un.h>
 #endif
 
-/* Encrypt header files */
+/* FastCGIENC header files */
 #include "mod_encrypt.h"
 /* @@@ This should go away when fcgi_protocol is re-written */
 #include "fcgi_protocol.h"
@@ -204,7 +212,7 @@ typedef struct _FcgiProcessInfo {
  * fcgi_server holds info for each AppClass specified in this
  * Web server's configuration.
  */
-typedef struct _EncryptServerInfo {
+typedef struct _FastCgiEncServerInfo {
     int flush;
     char *fs_path;                  /* pathname of executable */
     array_header *pass_headers;     /* names of headers to pass in the env */
@@ -227,6 +235,10 @@ typedef struct _EncryptServerInfo {
                                      * restarts after failure.  Can be zero. */
     u_int minServerLife;            /* minimum number of seconds a server must
                                      * live before it's considered borked. */
+    u_int maxFailedStarts;          /* The number of failed starts that can occur
+				     * before the application is considered broken
+				     * and start attempts fall back to
+				     * failedStartsDelay. */
     int restartOnExit;              /* = TRUE = restart. else terminate/free */
     u_int numFailures;              /* num restarts due to exit failure */
     int bad;                        /* is [not] having start problems */
@@ -244,12 +256,12 @@ typedef struct _EncryptServerInfo {
          directive;                 /* AppClass or ExternalAppClass */
     const char *socket_path;        /* Name used to create a socket */
     const char *host;               /* Hostname for externally managed
-                                     * Encrypt application processes */
+                                     * FastCGIENC application processes */
     unsigned short port;            /* Port number either for externally
-                                     * managed Encrypt applications or for
-                                     * server managed Encrypt applications,
+                                     * managed FastCGIENC applications or for
+                                     * server managed FastCGIENC applications,
                                      * where server became application mngr. */
-	int listenFd;                   /* Listener socket of FCGI app server
+    int listenFd;                   /* Listener socket of FCGI app server
                                      * class.  Passed to app server process
                                      * at process creation. */
     u_int processPriority;          /* If locally server managed process,
@@ -264,22 +276,19 @@ typedef struct _EncryptServerInfo {
     const char *group;              /* suexec group arg, AND used in comm
                                      * between RH and PM */
     const char *user;               /* used in comm between RH and PM */
-    /* Dynamic Encrypt apps configuration parameters */
+    /* Dynamic FastCGIENC apps configuration parameters */
     u_long totalConnTime;           /* microseconds spent by the web server
-                                     * waiting while encrypt app performs
+                                     * waiting while fastcgi app performs
                                      * request processing since the last
                                      * dynamicUpdateInterval */
     u_long smoothConnTime;          /* exponentially decayed values of the
                                      * connection times. */
     u_long totalQueueTime;          /* microseconds spent by the web server
-                                     * waiting to connect to the encrypt app
+                                     * waiting to connect to the fastcgi app
                                      * since the last dynamicUpdateInterval. */
-	const char *master_key_server;	/* IP address (or URL ) of Master Key Server */
-	const char *data_key_server;	/* IP address (or URL ) of Data Key Server */
     int nph;
-    struct _EncryptServerInfo *next;
+    struct _FastCgiEncServerInfo *next;
 } fcgi_server;
-
 
 /*
  * fcgi_request holds the state of a particular Encrypt request.
@@ -299,20 +308,23 @@ typedef struct {
 	int dataKeyLength;
 } fcgi_crypt;
 
+/*
+ * fcgi_request holds the state of a particular FastCGIENC request.
+ */
 typedef struct {
 #ifdef WIN32
     SOCKET fd;
 #else
-    int fd;                         /* connection to Encrypt server */
+    int fd;                         /* connection to FastCGIENC server */
 #endif
     int gotHeader;                  /* TRUE if reading content bytes */
     unsigned char packetType;       /* type of packet */
     int dataLen;                    /* length of data bytes */
     int paddingLen;                 /* record padding after content */
-    fcgi_server *fs;                /* Encrypt server info */
+    fcgi_server *fs;                /* FastCGIENC server info */
     const char *fs_path;         /* fcgi_server path */
-    Buffer *serverInputBuffer;   /* input buffer from Encrypt server */
-    Buffer *serverOutputBuffer;  /* output buffer to Encrypt server */
+    Buffer *serverInputBuffer;   /* input buffer from FastCgiEnc server */
+    Buffer *serverOutputBuffer;  /* output buffer to FastCgiEnc server */
     Buffer *clientInputBuffer;   /* client input buffer */
     Buffer *clientOutputBuffer;  /* client output buffer */
     table *authHeaders;          /* headers received from an auth fs */
@@ -323,6 +335,7 @@ typedef struct {
     char *fs_stderr;
     int fs_stderr_len;
     int parseHeader;                /* TRUE iff parsing response headers */
+    int gotCont;
     request_rec *r;
     int readingEndRequestBody;
     FCGI_EndRequestBody endRequestBody;
@@ -331,7 +344,7 @@ typedef struct {
     int exitStatusSet;
     unsigned int requestId;
     int eofSent;
-    int role;                       /* Encrypt Role: Authorizer or Responder */
+    int role;                       /* FastCGIENC Role: Authorizer or Responder */
     int dynamic;                    /* whether or not this is a dynamic app */
     struct timeval startTime;       /* dynamic app's connect() attempt start time */
     struct timeval queueTime;       /* dynamic app's connect() complete time */
@@ -346,7 +359,6 @@ typedef struct {
 
 	fcgi_crypt encryptor;
 	fcgi_crypt decryptor;
-
 } fcgi_request;
 
 /* Values of parseHeader field */
@@ -496,21 +508,6 @@ typedef struct {
     unsigned char headerBuff[8];
 } env_status;
 
-#ifndef TRUE
-#define TRUE  (1)
-#endif
-
-#ifndef FALSE
-#define FALSE (0)
-#endif
-
-#ifndef min
-#define min(a,b) ((a) < (b) ? (a) : (b))
-#endif
-
-#ifndef max
-#define max(a,b) ((a) > (b) ? (a) : (b))
-#endif
 /*
  * fcgi_config.c
  */
@@ -529,6 +526,10 @@ const char *fcgi_config_set_authoritative_slot(cmd_parms * cmd,
     void * dir_config, int arg);
 const char *fcgi_config_set_socket_dir(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_wrapper(cmd_parms *cmd, void *dummy, const char *arg);
+apcb_t fcgi_config_reset_globals(void * dummy);
+const char *fcgi_config_set_env_var(pool *p, char **envp, unsigned int *envc, char * var);
+
+const char *fcgi_config_set_logpath(cmd_parms *cmd, void *dummy, const char *arg1, const char *arg2);
 const char *fcgi_config_set_memcached(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_encrypt(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_decrypt(cmd_parms *cmd, void *dummy, const char *arg);
@@ -537,9 +538,6 @@ const char *fcgi_config_set_masterkeyserver(cmd_parms *cmd, void *dummy, const c
 const char *fcgi_config_set_datakeyserver(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_username(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_password(cmd_parms *cmd, void *dummy, const char *arg);
-const char *fcgi_config_set_logpath(cmd_parms *cmd, void *dummy, const char *arg1, const char *arg2);
-apcb_t fcgi_config_reset_globals(void * dummy);
-const char *fcgi_config_set_env_var(pool *p, char **envp, unsigned int *envc, char * var);
 
 /*
  * fcgi_pm.c
@@ -555,7 +553,7 @@ int fcgi_pm_main(void *dummy, child_info *info);
  */
 void fcgi_protocol_queue_begin_request(fcgi_request *fr);
 void fcgi_protocol_queue_client_buffer(fcgi_request *fr);
-int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env);
+int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env, int *expect_cont);
 int fcgi_protocol_dequeue(pool *p, fcgi_request *fr);
 
 /*
@@ -634,33 +632,7 @@ extern gid_t fcgi_group_id;                      /* the run gid of Apache & PM *
 
 extern fcgi_server *fcgi_servers;
 
-#ifndef BOOL
-typedef int BOOL;
-#endif
-#ifndef TRUE
-#define TRUE 1
-#endif
-#ifndef FALSE
-#define FALSE 0
-#endif
-
-extern BOOL fcgi_encrypt;					/* encrypt flag */
-extern BOOL fcgi_decrypt;					/* decrypt flag */
-
-extern char *fcgi_authserver;				/* FastCGI Auth Server */
-extern char *fcgi_masterkeyserver;			/* FastCGI Master Key Server */
-extern char *fcgi_datakeyserver;			/* FastCGI Data Key Server */
-
-extern char *fcgi_username;					/* FastCGI User Name */
-extern char *fcgi_password;					/* FastCGI Password */
-
-extern char *fcgi_logpath;					/* FastCGI Log file path */
-extern int fcgi_loglevel;					/* FastCGI Log level */
-
-extern char *fcgi_memcached_server;
-extern unsigned short fcgi_memcached_port;
-
-extern char *fcgi_socket_dir;             /* default EncryptIpcDir */
+extern char *fcgi_socket_dir;             /* default FastCgiEncIpcDir */
 
 /* pipe used for comm between the request handlers and the PM */
 extern int fcgi_pm_pipe[];
@@ -668,7 +640,7 @@ extern int fcgi_pm_pipe[];
 extern pid_t fcgi_pm_pid;
 
 extern char *fcgi_dynamic_dir;            /* directory for the dynamic
-                                           * encrypt apps' sockets */
+                                           * fastcgi apps' sockets */
 
 extern char *fcgi_empty_env;
 
@@ -702,8 +674,24 @@ extern u_int dynamicRestartDelay;
 extern array_header *dynamic_pass_headers;
 extern u_int dynamic_idle_timeout;
 extern int dynamicMinServerLife;
+extern int dynamicMaxFailedStarts;
 extern int dynamicFlush;
 
+extern char *fcgi_logpath;					/* FastCGI Log file path */
+extern int fcgi_loglevel;					/* FastCGI Log level */
+
+extern char *fcgi_memcached_server;
+extern unsigned short fcgi_memcached_port;
+
+extern BOOL fcgi_encrypt_flag;					/* encrypt flag */
+extern BOOL fcgi_decrypt_flag;					/* decrypt flag */
+
+extern char *fcgi_authserver;				/* FastCGI Auth Server */
+extern char *fcgi_masterkeyserver;			/* FastCGI Master Key Server */
+extern char *fcgi_datakeyserver;			/* FastCGI Data Key Server */
+
+extern char *fcgi_username;					/* FastCGI User Name */
+extern char *fcgi_password;					/* FastCGI Password */
 
 extern module MODULE_VAR_EXPORT encrypt_module;
 

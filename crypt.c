@@ -116,7 +116,7 @@ void CryptDataStream_(fcgi_crypt * cryptor, char *data, int offset, int len)
 void CryptDataStream(fcgi_crypt * cryptor, char *data, int offset, int len)
 {
 	EVP_CIPHER_CTX *ctx;
-	char buff[BUF_SIZE];
+	unsigned char buff[BUF_SIZE];
 
 	// check parameters
 	if (!cryptor || !data || ((offset+len) <= 0))
@@ -134,7 +134,7 @@ void CryptDataStream(fcgi_crypt * cryptor, char *data, int offset, int len)
 		CryptAesCtr(ctx, buff, offset, buff);
 	}
 
-	CryptAesCtr(ctx, data, len, data);
+	CryptAesCtr(ctx, (unsigned char*)data, len, (unsigned char*)data);
 
 	return;
 }

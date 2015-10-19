@@ -49,7 +49,7 @@ static int encrypt(EVP_CIPHER_CTX *ctx, unsigned char *plaintext, int plaintext_
 
 EVP_CIPHER_CTX *InitAesCtr(unsigned char *keydata, int keydata_len)
 {
-	int i, nrounds = 5;
+	int i, nrounds = 1;
 	unsigned char key[32], iv[32];
 	EVP_CIPHER_CTX *ctx;
 

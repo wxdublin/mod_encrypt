@@ -24,6 +24,7 @@
 
 int InitEncrypt(fcgi_crypt * encryptor)
 {
+	// get encrypt key from memcache or auth key server
 	if (encryptor->dataKeyLength == 0)
 	{
 		// get active key
@@ -31,8 +32,8 @@ int InitEncrypt(fcgi_crypt * encryptor)
  			return -1;
 	}
 	
+	// Initialize encrypt module
 	encryptor->crypt = InitAesCtr((unsigned char *)encryptor->dataKey, encryptor->dataKeyLength);
-
 	if (encryptor->crypt == NULL)
 	{
 		return -1;
@@ -43,6 +44,7 @@ int InitEncrypt(fcgi_crypt * encryptor)
 
 int InitDecrypt(fcgi_crypt * decryptor)
 {
+	// get decrypt key from memcache or auth key server
 	if (decryptor->dataKeyLength == 0)
 	{
 		// get active key
@@ -50,8 +52,8 @@ int InitDecrypt(fcgi_crypt * decryptor)
  			return -1;
 	}
 
+	// Initialize encrypt module
 	decryptor->crypt = InitAesCtr((unsigned char *)decryptor->dataKey, decryptor->dataKeyLength);
-
 	if (decryptor->crypt == NULL)
 	{
 		return -1;
@@ -73,45 +75,6 @@ void CloseCrypt(fcgi_crypt * cryptor)
 /*******************************************************************************
  * Encrypt any data by AES ctr encryption algorithm
  */ 
-void CryptDataStream_(fcgi_crypt * cryptor, char *data, int offset, int len)
-{
-	int i;
-	int block_cnt, block_offset, block_size;
-	unsigned char *buff;
-	EVP_CIPHER_CTX *ctx;
-
-	// check parameters
-	if (!cryptor || !data || ((offset+len) <= 0))
-		return;
-
-	ctx = (EVP_CIPHER_CTX *)cryptor->crypt;
-
-	buff = malloc(BUF_SIZE);
-	memset(buff, 0, BUF_SIZE);
-
-	block_cnt = offset/BUF_SIZE;
-	block_offset = 0;
-	block_size = BUF_SIZE*block_cnt;
-	for (i=0; i<block_cnt; i++)
-		CryptAesCtr(ctx, buff, BUF_SIZE, buff);
-	
-	block_cnt = 1;
-	block_offset = offset%BUF_SIZE;
-	block_size = min(len, BUF_SIZE-block_offset);
-	memset(buff, 0, BUF_SIZE);
-	memcpy(&buff[block_offset], data, block_size);
-	CryptAesCtr(ctx, buff, BUF_SIZE, buff);
-	memcpy(data, &buff[block_offset], block_size);
-
-	block_offset = block_size;
-	block_size = len - block_offset;
-	if (block_size > 0)
-		CryptAesCtr(ctx, (unsigned char *)&data[block_offset], block_size, (unsigned char *)&data[block_offset]);
-	
-	free(buff);
-
-	return;
-}
 
 void CryptDataStream(fcgi_crypt * cryptor, char *data, int offset, int len)
 {
@@ -119,7 +82,7 @@ void CryptDataStream(fcgi_crypt * cryptor, char *data, int offset, int len)
 	unsigned char buff[BUF_SIZE];
 
 	// check parameters
-	if (!cryptor || !data || ((offset+len) <= 0))
+	if (!cryptor || !cryptor->crypt || !data || ((offset+len) <= 0))
 		return;
 	
 	ctx = (EVP_CIPHER_CTX *)cryptor->crypt;

@@ -295,7 +295,6 @@ typedef struct _FastCgiEncServerInfo {
  */
 typedef struct {
 	void *crypt;
-	int count;
 	int offset;
 
 	char token[256];

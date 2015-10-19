@@ -3,6 +3,8 @@
 #include <openssl/err.h>
 #include <string.h>
 
+#include "aes256ctr.h"
+
 #define CRYPT_CBC_MODE	0
 #define CRYPT_CTR_MODE	1
 
@@ -47,7 +49,7 @@ static int encrypt(EVP_CIPHER_CTX *ctx, unsigned char *plaintext, int plaintext_
 
 EVP_CIPHER_CTX *InitAesCtr(unsigned char *keydata, int keydata_len)
 {
-	int i, nrounds = 1;
+	int i, nrounds = 5;
 	unsigned char key[32], iv[32];
 	EVP_CIPHER_CTX *ctx;
 

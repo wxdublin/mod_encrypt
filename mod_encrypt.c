@@ -1044,8 +1044,6 @@ static int write_to_client(fcgi_request *fr)
 	{
 		CryptDataStream(&fr->decryptor, fr->clientOutputBuffer->data, fr->decryptor.offset, count);
 		fr->decryptor.offset = 0;
-
-		fr->decryptor.count += count;
 	}
     if (count == 0)
         return OK;
@@ -2837,16 +2835,12 @@ static int content_handler(request_rec *r)
 
 	/* log session start */
 	if (r->the_request)
-	{
 		log_message(ENCRYPT_LOG_INFO, "Session Starting :", r->the_request, NULL, NULL);
-	}
 
     /* Setup a new FastCGIENC request */
     ret = create_fcgi_request(r, NULL, &fr);
     if (ret)
-    {
         goto HANDLER_EXIT;
-    }
 
     /* If its a dynamic invocation, make sure scripts are OK here */
     if (fr->dynamic && ! (ap_allow_options(r) & OPT_EXECCGI) 
@@ -2859,9 +2853,7 @@ static int content_handler(request_rec *r)
     }
 
 	if (fcgi_encrypt_flag == TRUE)
-	{
 		InitEncrypt(&fr->encryptor);
-	}
 	
     /* Process the encrypt-script request */
     if ((ret = do_work(r, fr)) != OK)
@@ -2870,17 +2862,13 @@ static int content_handler(request_rec *r)
     /* Special case redirects */
     ret = post_process_for_redirects(r, fr);
 
+HANDLER_EXIT:
 	if (fcgi_encrypt_flag == TRUE)
-	{
 		CloseCrypt(&fr->encryptor);
-	}
 
 	if (fcgi_decrypt_flag == TRUE)
-	{
 		CloseCrypt(&fr->decryptor);
-	}
-	
-HANDLER_EXIT:
+
 	if (r->the_request)
 	{
 		log_message(ENCRYPT_LOG_INFO, "Session Ended :", r->the_request, NULL, NULL);

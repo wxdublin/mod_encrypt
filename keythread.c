@@ -623,7 +623,7 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 		{
 			char dataKeyCacheName[KEY_SIZE];
 			memset(dataKeyCacheName, 0, KEY_SIZE);
-			sprintf(dataKeyCacheName, "fastcgi-%s-%s-%s", fc.masterKeyId, fc.dataKeyId, fcgi_username);
+			sprintf(dataKeyCacheName, "fastcgienc-%s-%s-%s", fc.masterKeyId, fc.dataKeyId, fcgi_username);
 			memcache_set(dataKeyCacheName, fc.dataKey, KEY_STORE_PERIOD);
 
 			if (timeout <= 0)

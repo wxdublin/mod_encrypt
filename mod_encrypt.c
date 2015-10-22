@@ -126,6 +126,7 @@ char *fcgi_dynamic_dir = NULL;            /* directory for the dynamic
 
 char *fcgi_logpath = NULL;					/* default FastCGI Log file path */
 int fcgi_loglevel = ENCRYPT_LOG_ERROR;		/* default FastCGI Log level */
+apr_file_t *fcgi_logfp = NULL;
 
 char *fcgi_memcached_server = "127.0.0.1";	/* hostname or IP for memcached server */
 unsigned short fcgi_memcached_port = 11211;	/* port number for memcached server */
@@ -395,6 +396,10 @@ static apcb_t init_module(server_rec *s, pool *p)
 	{
 		int ret;
 
+		/* Create log file */
+		if ((err = fcgi_config_make_logfile(p, fcgi_logpath)))
+			ap_log_error(FCGI_LOG_ERR, s, "FastCGIENC: %s", err);
+
 		// init key thread
 		ret = key_thread_init();
 		if (ret < 0)
@@ -470,6 +475,11 @@ static void fcgi_child_init(server_rec *dc, pool *p)
 	/* Initialize Memcache and Key Thread */
 	{
 		int ret;
+		const char *err;
+
+		/* Create log file */
+		if ((err = fcgi_config_make_logfile(p, fcgi_logpath)))
+			ap_log_error(FCGI_LOG_ERR, fcgi_apache_main_server, "FastCGIENC: %s", err);
 
 		// init key thread
 		ret = key_thread_init();
@@ -2522,7 +2532,7 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
     int rv;
     pool *rp = r->pool;
 
-    fcgi_protocol_queue_begin_request(fr);
+	fcgi_protocol_queue_begin_request(fr);
 
     if (fr->role == FCGI_RESPONDER) 
     {

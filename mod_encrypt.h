@@ -131,12 +131,12 @@
 #elif defined(APACHE2)
 
 /* Default dir for Unix/Domain sockets */
-#define DEFAULT_SOCK_DIR  DEFAULT_REL_RUNTIMEDIR "/fastcgi"
+#define DEFAULT_SOCK_DIR  DEFAULT_REL_RUNTIMEDIR "/encrypt"
 
 #else /* !WIN32 && !APACHE2 */
 
 /* Default dir for Unix/Domain sockets */
-#define DEFAULT_SOCK_DIR "logs/fastcgi"
+#define DEFAULT_SOCK_DIR "logs/encrypt"
 
 #endif
 

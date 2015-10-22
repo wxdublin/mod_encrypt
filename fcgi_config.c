@@ -58,7 +58,7 @@ static const char *get_host_n_port(pool *p, const char **arg,
 
     return NULL;
 }
-
+
 /*******************************************************************************
  * Get the next configuration directive argument, & return an u_short.
  * The pool arg should be temporary storage.
@@ -311,6 +311,70 @@ apcb_t fcgi_config_reset_globals(void* dummy)
 }
 
 /*******************************************************************************
+ * Create a file to hold fastcgi encrypt log.
+ */
+const char *fcgi_config_make_logfile(pool *tp, char *path)
+{
+    struct stat finfo;
+    const char *err = NULL;
+	apr_status_t rv; 
+
+    /* Is the directory spec'd correctly */
+#ifndef WIN32
+    if (*path != '/') {
+        return "path is not absolute (it must start with a \"/\")";
+    }
+    else {
+        int i = strlen(path) - 1;
+
+        /* Strip trailing "/"s */
+        while(i > 0 && path[i] == '/') path[i--] = '\0';
+    }
+#endif
+
+    /* Does it exist? */
+    if (stat(path, &finfo) == 0) {
+		/* Yes, is it a directory? */
+		if (S_ISDIR(finfo.st_mode))
+			return "is a directory!";
+	}
+
+    /* No, but maybe we can create it */
+	if ((rv = apr_file_open(&fcgi_logfp, fcgi_logpath, \
+		APR_FOPEN_CREATE | APR_FOPEN_WRITE | APR_FOPEN_APPEND | APR_FOPEN_XTHREAD | 0, \
+		APR_OS_DEFAULT, tp)) != APR_SUCCESS)
+    {
+        return ap_psprintf(tp,
+            "doesn't exist and can't be created: %s",
+            strerror(errno));
+    }
+
+#ifndef WIN32
+    /* If we're root, we're gonna setuid/setgid so we need to chown */
+    if (geteuid() == 0 && chown(path, ap_user_id, ap_group_id) != 0) {
+        return ap_psprintf(tp,
+            "can't chown() to the server (uid %ld, gid %ld): %s",
+            (long)ap_user_id, (long)ap_group_id, strerror(errno));
+    }
+#endif
+
+    /* Can we RWX in there? */
+#ifdef WIN32
+    err = fcgi_util_check_access(tp, NULL, &finfo, _S_IREAD | _S_IWRITE | _S_IEXEC, fcgi_user_id, fcgi_group_id);
+#else
+    err = fcgi_util_check_access(tp, NULL, &finfo, R_OK | W_OK | X_OK,
+                      fcgi_user_id, fcgi_group_id);
+#endif
+    if (err != NULL) {
+        return ap_psprintf(tp,
+            "access for server (uid %ld, gid %ld) failed: %s",
+            (long)fcgi_user_id, (long)fcgi_group_id, err);
+    }
+
+    return NULL;
+}
+
+/*******************************************************************************
  * Create a directory to hold Unix/Domain sockets.
  */
 const char *fcgi_config_make_dir(pool *tp, char *path)
@@ -515,7 +579,7 @@ const char *fcgi_config_set_socket_dir(cmd_parms *cmd, void *dummy, const char *
 
     return NULL;
 }
-
+
 /*******************************************************************************
  * Enable, disable, or specify the path to a wrapper used to invoke all
  * FastCGIENC applications.

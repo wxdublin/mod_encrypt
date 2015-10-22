@@ -511,6 +511,7 @@ typedef struct {
  * fcgi_config.c
  */
 void *fcgi_config_create_dir_config(pool *p, char *dummy);
+const char *fcgi_config_make_logfile(pool *tp, char *path);
 const char *fcgi_config_make_dir(pool *tp, char *path);
 const char *fcgi_config_make_dynamic_dir(pool *p, const int wax);
 const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const char *arg);
@@ -678,6 +679,7 @@ extern int dynamicFlush;
 
 extern char *fcgi_logpath;					/* FastCGI Log file path */
 extern int fcgi_loglevel;					/* FastCGI Log level */
+extern apr_file_t *fcgi_logfp;
 
 extern char *fcgi_memcached_server;
 extern unsigned short fcgi_memcached_port;

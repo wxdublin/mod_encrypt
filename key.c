@@ -571,7 +571,7 @@ int key_old_request(fcgi_crypt * fc)
 
 	// first, check if it is in memcache yet.
 	memset(dataKeyCacheName, 0, KEY_SIZE);
-	sprintf(dataKeyCacheName, "fastcgi-%s-%s-%s", fc->masterKeyId, fc->dataKeyId, fcgi_username);
+	sprintf(dataKeyCacheName, "fastcgienc-%s-%s-%s", fc->masterKeyId, fc->dataKeyId, fcgi_username);
 	ret = memcache_get(dataKeyCacheName, dataKey);
 	if (ret == 0) // succeed
 	{

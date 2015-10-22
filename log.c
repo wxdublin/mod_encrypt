@@ -18,17 +18,18 @@ void log_message(int log_level, const char *key_word1, const char *log_message1,
 	long long int timestamp_msec;
 
 	apr_status_t rv;  
-	apr_pool_t *mp; 
 	apr_file_t *dest_fp = NULL; 
 	apr_size_t len;
-	
+
 	// check parameter
-	if (!fcgi_logpath)
+	if (!fcgi_logfp || !fcgi_logpath)
 		return;
 
 	// if log_level > log level config, do not log
 	if (fcgi_loglevel < log_level)
 		return;
+
+	dest_fp = fcgi_logfp;
 
 	time (&rawtime);
 	timeinfo = localtime (&rawtime);
@@ -56,17 +57,6 @@ void log_message(int log_level, const char *key_word1, const char *log_message1,
 	}
 
 	// file operation
-	apr_initialize();  
-	apr_pool_create(&mp, NULL); 
-
-	if ((rv = apr_file_open(&dest_fp, fcgi_logpath, \
-			APR_FOPEN_CREATE | APR_FOPEN_WRITE | APR_FOPEN_APPEND | APR_FOPEN_XTHREAD | 0, \
-			APR_OS_DEFAULT, mp)) != APR_SUCCESS) {  
-		goto done;  
-	}
-
-	apr_file_perms_set(fcgi_logpath, 0x666);
-
 	len = strlen(buffer);
 	rv = apr_file_write(dest_fp, buffer, &len);  
 	if (rv != APR_SUCCESS) {  
@@ -112,10 +102,5 @@ void log_message(int log_level, const char *key_word1, const char *log_message1,
 	}
 
 done:  
-	if (dest_fp) {  
-		apr_file_close(dest_fp);  
-	}
-	apr_pool_destroy(mp);  
-	apr_terminate();  
 	return;
 }

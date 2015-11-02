@@ -1,6 +1,6 @@
 
 
-                  Apache Encrypt Module Installation
+                  Apache FastCGIENC Module Installation
 
 
 !!!
@@ -19,13 +19,13 @@ Notes
 
   mod_encrypt has not been tested on all of the Apache supported
   platforms.  These are known to work: SunOS, Solaris, SCO, Linux,
-  NetBSD (see http://www.netbsd.org/packages/www/ap-encrypt/), FreeBSD,
+  NetBSD (see http://www.netbsd.org/packages/www/ap-fastcgi/), FreeBSD,
   Digital Unix, AIX, IRIX, FreeBSD, Windows (NT4 and NT2K), MacOSX
   (10.1.4), and QNX (Inet sockets only).  If you're successful in using
   this module on other platforms, please email 
-  encrypt-developers @ encrypt.com.
+  fastcgi-developers @ fastcgi.com.
 
-  This module is maintained at http://www.encrypt.com.  
+  This module is maintained at http://www.fastcgi.com.  
   
   See the web page for mailing list information.
   
@@ -53,28 +53,28 @@ Introduction
 ====================================
 
   1. Copy or move the mod_encrypt distribution directory to
-     <apache_dir>/src/modules/encrypt.
+     <apache_dir>/src/modules/fastcgi.
 
-  2. Specify "--activate-module=src/modules/encrypt/libencrypt.a" as an
+  2. Specify "--activate-module=src/modules/fastcgi/libfastcgi.a" as an
      argument to ./configure from the <apache_dir> directory.  If you've
      previously used APACI to configure Apache, you can also specify this
      as an argument to ./config.status (Apache 1.3.1+) in order to
      preserve the existing configuration.
 
        <apache_dir>$ ./configure  \
-                  --activate-module=src/modules/encrypt/libencrypt.a
+                  --activate-module=src/modules/fastcgi/libfastcgi.a
 
      or
 
        <apache_dir>$ ./config.status  \
-                  --activate-module=src/modules/encrypt/libencrypt.a
+                  --activate-module=src/modules/fastcgi/libfastcgi.a
 
   3. Rebuild and reinstall Apache.
 
        <apache_dir>$ make
        <apache_dir>$ make install
 
-  4. Edit the httpd configuration files to enable your Encrypt
+  4. Edit the httpd configuration files to enable your FastCGIENC
      application(s).  See docs/mod_encrypt.html for details.
 
   5. Stop and start the server.
@@ -87,14 +87,14 @@ Introduction
 ==================================
 
   1. Copy or move the mod_encrypt distribution directory to
-     <apache_dir>/src/modules/encrypt.
+     <apache_dir>/src/modules/fastcgi.
 
-  2. Add the Encrypt module to <apache_dir>/src/Configuration.  Note
+  2. Add the FastCGIENC module to <apache_dir>/src/Configuration.  Note
      that modules are listed in reverse priority order --- the ones that
      come later can override the behavior of those that come earlier.  I
      put mine just after the mod_cgi entry.
 
-       AddModule modules/encrypt/libencrypt.a
+       AddModule modules/fastcgi/libfastcgi.a
 
   3. From the <apache_dir>/src directory, reconfigure and rebuild Apache.
 
@@ -103,7 +103,7 @@ Introduction
     
      Install the new httpd.
 
-  4. Edit the httpd configuration files to enable your Encrypt
+  4. Edit the httpd configuration files to enable your FastCGIENC
      application(s).  See docs/mod_encrypt.html for details.
 
   5. Stop and start the server.
@@ -115,18 +115,18 @@ Introduction
 3) Installing mod_encrypt as a DSO
 ==================================
 
-  NOTE: If you use EncryptSuexec, mod_encrypt cannot reliably 
+  NOTE: If you use FastCgiEncSuexec, mod_encrypt cannot reliably 
   determine the suexec path when built as a DSO.  To workaround
-  this, provide the full path in the EncryptSuexec directive.
+  this, provide the full path in the FastCgiEncSuexec directive.
   
   1. From the mod_encrypt directory, compile the module.
   
-       $ cd <mod_encrypt_dir>
-       <mod_encrypt_dir>$ apxs -o mod_encrypt.so -c *.c
+       $ cd <mod_fastcgi_dir>
+       <mod_fastcgi_dir>$ apxs -o mod_encrypt.so -c *.c
     
   2. Install the module.
   
-       <mod_encrypt_dir>$ apxs -i -a -n encrypt mod_encrypt.so
+       <mod_fastcgi_dir>$ apxs -i -a -n fastcgi mod_encrypt.so
     
      This should create an entry in httpd.conf that looks like this: 
  
@@ -138,7 +138,7 @@ Introduction
 
        AddModule mod_encrypt.c
 
-  3. Edit the httpd configuration file(s) to enable your Encrypt
+  3. Edit the httpd configuration file(s) to enable your FastCGIENC
      application(s).  See docs/mod_encrypt.html for details.
 
      If you want to wrap the mod_encrypt directives, use:
@@ -204,7 +204,7 @@ Introduction
     4. Select "Build mod_encrypt.dll" from the "Build" menu.
 
   To install mod_encrypt (built above or retrieved from 
-  http://encrypt.com/dist/):
+  http://fastcgi.com/dist/):
 
     1. Copy the mod_encrypt.dll to the Apache modules directory 
        (e.g. C:\Apache\modules)
@@ -220,6 +220,6 @@ Introduction
 
          AddModule mod_encrypt.c
 
-    3. Edit the httpd configuration file(s) to enable your Encrypt
+    3. Edit the httpd configuration file(s) to enable your FastCGIENC
        application(s).  See docs/mod_encrypt.html for details.
 

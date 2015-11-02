@@ -1,5 +1,0 @@
-version=2
-
-http://www.encrypt.com/dist/ \
-	mod_encrypt-([\d.]+)\.tar\.gz \
-	debian uupdate

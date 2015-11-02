@@ -1,11 +1,11 @@
 
 
-             ***  Apache Encrypt Module Installation  ***
+             ***  Apache FastCGIENC Module Installation  ***
 
 
   See docs/mod_encrypt.html for configuration information.
 
-  This module is maintained at http://www.encrypt.com.  
+  This module is maintained at http://www.fastcgi.com.  
   
   See the web page for mailing list information.
   
@@ -13,10 +13,10 @@
   *NIX
   ====
 
-    $ cd <mod_encrypt_dir>
+    $ cd <mod_fastcgi_dir>
     $ cp Makefile.AP2 Makefile
     $ make 
-    $ sudo make install
+    $ make install
 
     If your Apache2 installation isn't in /usr/local/apache2, then
     set the top_dir variable when running make (or edit the
@@ -27,6 +27,7 @@
     Add an entry to httpd.conf like this:
 
       LoadModule encrypt_module modules/mod_encrypt.so
+ 
 
   WIN
   ===

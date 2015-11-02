@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <jansson.h>
+#include "jansson/jansson.h"
 
 /*
  * Parse text into a JSON object. If text is valid JSON, returns a

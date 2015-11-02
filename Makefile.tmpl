@@ -5,21 +5,21 @@
 # 
 # $Id: Makefile.tmpl,v 1.6 2000/08/16 01:51:47 robs Exp $
 
-LIB=libencrypt.$(LIBEXT)
+LIB=libfastcgi.$(LIBEXT)
 
-OBJS=mod_encrypt.o fcgi_buf.o fcgi_pm.o fcgi_protocol.o	fcgi_config.o fcgi_util.o ./crypt/crypt.o ./crypt/aes256/aes256.o
+OBJS=mod_encrypt.o fcgi_buf.o fcgi_pm.o fcgi_protocol.o	fcgi_config.o fcgi_util.o
 
 # Build commands
 
 all:  lib
 lib: $(LIB)
 
-libencrypt.a: $(OBJS)
+libfastcgi.a: $(OBJS)
 	rm -f $@
 	ar cr $@ $(OBJS)
 	$(RANLIB) $@
  
-libencrypt.so: $(OBJS)
+libfastcgi.so: $(OBJS)
 	rm -f $@
 	$(LD_SHLIB) $(LDFLAGS_SHLIB) -o $@ $(OBJS)
 
@@ -48,8 +48,6 @@ depend:
 $(OBJS): fcgi.h           \
          mod_encrypt.h    \
          fcgi_protocol.h  \
-         crypt/crypt.h \
-         crypt/aes256/aes256.h
      $(INCDIR)/httpd.h               \
      $(INCDIR)/http_config.h         \
      $(INCDIR)/http_request.h        \

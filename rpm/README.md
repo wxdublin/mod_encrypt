@@ -5,6 +5,9 @@ mod_encrypt-rpm
 [mod_fastcgi](http://www.fastcgi.com/mod_fastcgi/docs/mod_fastcgi.html).
 
 
+##Install##
+1. sudo yum install mod_encrypt-1.0.0-1.x86_64.rpm
+
 ##Building##
 
 1. git clone https://github.com/GiorgioRegni/mod_encrypt.git

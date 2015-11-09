@@ -378,7 +378,7 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env,
 
 		charCount = fcgi_buf_add_block(fr->serverOutputBuffer, encapbuff, encaplen);
 
-		log_message(ENCRYPT_LOG_TRACK, "sending X-Scal-Usermd:", encapbuff, NULL, NULL);
+		log_message(ENCRYPT_LOG_DEBUG, "sending X-Scal-Usermd : %s", encapbuff);
 
 		free(encapbuff);
 
@@ -387,7 +387,7 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env,
 		}
 	}
 
-    ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
+    log_message(ENCRYPT_LOG_WARN,
         "FastCGIENC: %s %s %s auth %s", remote, method, uri, auth);
 
     if (BufferFree(fr->serverOutputBuffer) < sizeof(FCGI_Header)) {
@@ -459,13 +459,13 @@ int fcgi_protocol_dequeue(pool *p, fcgi_request *fr)
              * and other packet problems.
              */
             if (header.version != FCGI_VERSION) {
-                ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
+                log_message(ENCRYPT_LOG_ERR,
                     "FastCGIENC: comm with server \"%s\" aborted: protocol error: invalid version: %d != FCGI_VERSION(%d)",
                     fr->fs_path, header.version, FCGI_VERSION);
                 return HTTP_INTERNAL_SERVER_ERROR;
             }
             if (header.type > FCGI_MAXTYPE) {
-                ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
+                log_message(ENCRYPT_LOG_ERR,
                     "FastCGIENC: comm with server \"%s\" aborted: protocol error: invalid type: %d > FCGI_MAXTYPE(%d)",
                     fr->fs_path, header.type, FCGI_MAXTYPE);
                 return HTTP_INTERNAL_SERVER_ERROR;
@@ -532,7 +532,7 @@ int fcgi_protocol_dequeue(pool *p, fcgi_request *fr)
                     while ((null = memchr(start, '\0', fr->fs_stderr_len)))
                     {
                         int discard = ++null - start;
-                        ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
+                        log_message(ENCRYPT_LOG_ERR,
                             "FastCGIENC: server \"%s\" sent a null character in the stderr stream!?, "
                             "discarding %d characters of stderr", fr->fs_path, discard);
                         start = null;
@@ -545,7 +545,7 @@ int fcgi_protocol_dequeue(pool *p, fcgi_request *fr)
                         if (start != end)
                         {
                             *end = '\0';
-                            ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r, 
+                            log_message(ENCRYPT_LOG_ERR, 
                                 "FastCGIENC: server \"%s\" stderr: %s", fr->fs_path, start);
                         }
                         end++;
@@ -564,9 +564,9 @@ int fcgi_protocol_dequeue(pool *p, fcgi_request *fr)
                         else if (fr->fs_stderr_len == FCGI_SERVER_MAX_STDERR_LINE_LEN)
                         {
                             /* Full buffer, dump it and complain */
-                            ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r, 
+                            log_message(ENCRYPT_LOG_ERR, 
                                "FastCGIENC: server \"%s\" stderr: %s", fr->fs_path, fr->fs_stderr);
-                            ap_log_rerror(FCGI_LOG_WARN_NOERRNO, fr->r,
+                            log_message(ENCRYPT_LOG_WARN,
                                 "FastCGIENC: too much stderr received from server \"%s\", "
                                 "increase FCGI_SERVER_MAX_STDERR_LINE_LEN (%d) and rebuild "
                                 "or use \"\\n\" to terminate lines",
@@ -580,7 +580,7 @@ int fcgi_protocol_dequeue(pool *p, fcgi_request *fr)
             case FCGI_END_REQUEST:
                 if (!fr->readingEndRequestBody) {
                     if (fr->dataLen != sizeof(FCGI_EndRequestBody)) {
-                        ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
+                        log_message(ENCRYPT_LOG_ERR,
                             "FastCGIENC: comm with server \"%s\" aborted: protocol error: "
                             "invalid FCGI_END_REQUEST size: "
                             "%d != sizeof(FCGI_EndRequestBody)(%d)",
@@ -602,7 +602,7 @@ int fcgi_protocol_dequeue(pool *p, fcgi_request *fr)
                         /*
                          * XXX: What to do with FCGI_OVERLOADED?
                          */
-                        ap_log_rerror(FCGI_LOG_ERR_NOERRNO, fr->r,
+                        log_message(ENCRYPT_LOG_ERR,
                             "FastCGIENC: comm with server \"%s\" aborted: protocol error: invalid FCGI_END_REQUEST status: "
                             "%d != FCGI_REQUEST_COMPLETE(%d)", fr->fs_path,
                             erBody->protocolStatus, FCGI_REQUEST_COMPLETE);

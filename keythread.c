@@ -200,12 +200,12 @@ static int get_auth_token(char *tokenstr)
 
 		/* Perform the request, res will get the return code */ 
 		res = curl_easy_perform(curl);
-		log_message(ENCRYPT_LOG_TRACK, "KEY-THREAD - curl request:", serverurl, "senddata:", senddata);
+		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - curl request : %s, senddata : %s", serverurl, senddata);
 
 		/* Check for errors */ 
 		if(res != CURLE_OK)
 		{
-			log_message(ENCRYPT_LOG_ERROR, "KEY-THREAD - curl failed:", curl_easy_strerror(res), NULL, NULL);
+			log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - curl failed : %s", curl_easy_strerror(res));
 
 			fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 			ret = -1;
@@ -221,13 +221,13 @@ static int get_auth_token(char *tokenstr)
 
 	// process json response
 	jsonhandler = json_load(recvdata);
-	log_message(ENCRYPT_LOG_TRACK, "KEY-THREAD - curl response:", recvdata, NULL, NULL);
+	log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - curl response : %s", recvdata);
 
 	// get token
 	token = json_get_string(jsonhandler, "token");
 	if (!token)
 	{
-		log_message(ENCRYPT_LOG_ERROR, "KEY-THREAD - not found \"token\" in response:", recvdata, NULL, NULL);
+		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - not found \"token\" in response : %s", recvdata);
 		ret = -1;
 		goto AUTH_REQUEST_EXIT;
 	}
@@ -236,7 +236,7 @@ static int get_auth_token(char *tokenstr)
 	timestring = json_get_string(jsonhandler, "expiration_time");
 	if (!timestring)
 	{
-		log_message(ENCRYPT_LOG_ERROR, "KEY-THREAD - not found \"expiration_time\" in response:", recvdata, NULL, NULL);
+		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - not found \"expiration_time\" in response : %s", recvdata);
 		ret = -1;
 		goto AUTH_REQUEST_EXIT;
 	}
@@ -307,14 +307,12 @@ static int get_master_key(const char *token, char *masterkeyid, char *masterkey,
 
 		/* Perform the request, res will get the return code */ 
 		res = curl_easy_perform(curl);
-		log_message(ENCRYPT_LOG_TRACK, "KEY-THREAD - curl request:", serverurl, "header:", headerstring);
+		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - curl request : %s, header : %s", serverurl, headerstring);
 
 		/* Check for errors */ 
 		if(res != CURLE_OK)
 		{
-			log_message(ENCRYPT_LOG_ERROR, "KEY-THREAD - curl failed:", curl_easy_strerror(res), NULL, NULL);
-
-			fprintf(stderr, "curl_easy_perform() failed: %s\n",	curl_easy_strerror(res));
+			log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - curl failed : %s", curl_easy_strerror(res));
 			ret = -1;
 			goto MASTERKEY_EXIT;
 		}
@@ -328,13 +326,13 @@ static int get_master_key(const char *token, char *masterkeyid, char *masterkey,
 
 	// process json response
 	jsonhandler = json_load(recvdata);
-	log_message(ENCRYPT_LOG_TRACK, "KEY-THREAD - curl response:", recvdata, NULL, NULL);
+	log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - curl response : %s", recvdata);
 
 	// get key_id
 	jsonmasterkeyid = json_get_string(jsonhandler, "key_id");
 	if (!jsonmasterkeyid)
 	{
-		log_message(ENCRYPT_LOG_ERROR, "KEY-THREAD - not found \"master key id\" in response:", recvdata, NULL, NULL);
+		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - not found \"master key id\" in response : %s", recvdata);
 		ret = -1;
 		goto MASTERKEY_EXIT;
 	}
@@ -343,7 +341,7 @@ static int get_master_key(const char *token, char *masterkeyid, char *masterkey,
 	timeout = json_get_integer(jsonhandler, "refresh_interval");
 	if (timeout < 0)
 	{
-		log_message(ENCRYPT_LOG_ERROR, "KEY-THREAD - not found \"master key refresh_interval\" in response:", recvdata, NULL, NULL);
+		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - not found \"master key refresh_interval\" in response : %s", recvdata);
 
 		ret = -1;
 		goto MASTERKEY_EXIT;
@@ -361,7 +359,7 @@ static int get_master_key(const char *token, char *masterkeyid, char *masterkey,
 	jsoniv = json_get_string(jsonhandler, "initialization_vector");
 	if (!jsoniv)
 	{
-		log_message(ENCRYPT_LOG_ERROR, "KEY-THREAD - not found \"initialization_vector\" in response:", recvdata, NULL, NULL);
+		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - not found \"initialization_vector\" in response : %s", recvdata);
 
 		ret = -1;
 		goto MASTERKEY_EXIT;
@@ -433,12 +431,12 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 
 		/* Perform the request, res will get the return code */ 
 		res = curl_easy_perform(curl);
-		log_message(ENCRYPT_LOG_TRACK, "KEY-THREAD - curl request:", serverurl, "header:", headerstring);
+		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - curl request : %s, header : %s", serverurl, headerstring);
 
 		/* Check for errors */ 
 		if(res != CURLE_OK)
 		{
-			log_message(ENCRYPT_LOG_ERROR, "KEY-THREAD - curl failed:", curl_easy_strerror(res), NULL, NULL);
+			log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - curl failed : %s", curl_easy_strerror(res));
 
 			fprintf(stderr, "curl_easy_perform() failed: %s\n",	curl_easy_strerror(res));
 			curl_easy_cleanup(curl);
@@ -455,13 +453,13 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 
 	// process json response
 	jsonhandler = json_load(recvdata);
-	log_message(ENCRYPT_LOG_TRACK, "KEY-THREAD - curl response:", recvdata, NULL, NULL);
+	log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - curl response : %s", recvdata);
 
 	// get data key id
 	jsondatakeyid = json_get_string(jsonhandler, "key_id");
 	if (!jsondatakeyid)
 	{
-		log_message(ENCRYPT_LOG_ERROR, "KEY-THREAD - not found \"data key id\" in response:", recvdata, NULL, NULL);
+		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - not found \"data key id\" in response : %s", recvdata);
 
 		ret = -1;
 		goto DATAKEY_EXIT;
@@ -471,7 +469,7 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 	jsonmasterkeyid = json_get_string(jsonhandler, "master_key_id");
 	if (!jsonmasterkeyid)
 	{
-		log_message(ENCRYPT_LOG_ERROR, "KEY-THREAD - unmatched master key id in response:", recvdata, NULL, NULL);
+		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - unmatched master key id in response : %s", recvdata);
 
 		ret = -1;
 		goto DATAKEY_EXIT;
@@ -486,7 +484,7 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 	timeout = json_get_integer(jsonhandler, "refresh_interval");
 	if (timeout < 0)
 	{
-		log_message(ENCRYPT_LOG_ERROR, "KEY-THREAD - not found \"data key refresh_interval\" in response:", recvdata, NULL, NULL);
+		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - not found \"data key refresh_interval\" in response : %s", recvdata);
 
 		ret = -1;
 		goto DATAKEY_EXIT;
@@ -496,7 +494,7 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 	jsonkeyencryptedbase64 = json_get_string(jsonhandler, "key_encrypted_base64");
 	if (!jsonkeyencryptedbase64)
 	{
-		log_message(ENCRYPT_LOG_ERROR, "KEY-THREAD - not found \"key_encrypted_base64\" in response:", recvdata, NULL, NULL);
+		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - not found \"key_encrypted_base64\" in response : %s", recvdata);
 
 		ret = -1;
 		goto DATAKEY_EXIT;

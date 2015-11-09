@@ -42,14 +42,15 @@ HANDLE fcgi_event_handles[3];
 #endif
 #endif
 
+#include "log.h"
+
 
 #ifndef WIN32
 static int seteuid_root(void)
 {
     int rc = seteuid(getuid());
     if (rc) {
-        ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
-            "FastCGIENC: seteuid(0) failed");
+		log_message(ENCRYPT_LOG_ALERT, "FastCGIENC: seteuid(0) failed");
     }
     return rc;
 }
@@ -58,8 +59,7 @@ static int seteuid_user(void)
 {
     int rc = seteuid(ap_user_id);
     if (rc) {
-        ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
-            "FastCGIENC: seteuid(%u) failed", (unsigned)ap_user_id);
+		log_message(ENCRYPT_LOG_ALERT, "FastCGIENC: seteuid(%u) failed", (unsigned)ap_user_id);
     }
     return rc;
 }
@@ -162,7 +162,7 @@ static void shutdown_all()
     	        {
     	            /* Remove the socket file */
     	            if (unlink(s->socket_path) != 0 && errno != ENOENT) {
-    	                ap_log_error(FCGI_LOG_ERR, fcgi_apache_main_server,
+    	                log_message(ENCRYPT_LOG_ERR,
     	                    "FastCGIENC: unlink() failed to remove socket file \"%s\" for%s server \"%s\"",
     	                    s->socket_path,
     	                    (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "", s->fs_path);
@@ -223,7 +223,7 @@ static int init_listen_sock(fcgi_server * fs)
 #ifdef WIN32
         errno = WSAGetLastError();  /* Not sure if this will work as expected */
 #endif
-        ap_log_error(FCGI_LOG_CRIT_ERRNO, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_CRIT, 
             "FastCGIENC: can't create %sserver \"%s\": socket() failed", 
             (fs->directive == APP_CLASS_DYNAMIC) ? "(dynamic) " : "",
             fs->fs_path);
@@ -254,7 +254,7 @@ static int init_listen_sock(fcgi_server * fs)
         ap_snprintf(port, sizeof(port), "port=%d", 
             ((struct sockaddr_in *)fs->socket_addr)->sin_port);
 
-        ap_log_error(FCGI_LOG_CRIT_ERRNO, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_CRIT,
             "FastCGIENC: can't create %sserver \"%s\": bind() failed [%s]", 
             (fs->directive == APP_CLASS_DYNAMIC) ? "(dynamic) " : "",
             fs->fs_path,
@@ -270,7 +270,7 @@ static int init_listen_sock(fcgi_server * fs)
     else if (fs->socket_addr->sa_family == AF_UNIX
         && chmod(((struct sockaddr_un *)fs->socket_addr)->sun_path, S_IRUSR | S_IWUSR))
     {
-        ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_CRIT,
             "FastCGIENC: can't create %sserver \"%s\": chmod() of socket failed", 
             (fs->directive == APP_CLASS_DYNAMIC) ? "(dynamic) " : "",
             fs->fs_path);
@@ -283,7 +283,7 @@ static int init_listen_sock(fcgi_server * fs)
 #ifdef WIN32
         errno = WSAGetLastError();
 #endif
-        ap_log_error(FCGI_LOG_CRIT_ERRNO, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_CRIT,
             "FastCGIENC: can't create %sserver \"%s\": listen() failed", 
             (fs->directive == APP_CLASS_DYNAMIC) ? "(dynamic) " : "",
             fs->fs_path);
@@ -504,7 +504,7 @@ FailedSystemCallExit:
     cgi_build_command = APR_RETRIEVE_OPTIONAL_FN(ap_cgi_build_command);
     if (cgi_build_command == NULL) 
     {
-        ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_CRIT,
             "FastCGIENC: can't exec server \"%s\", mod_cgi isn't loaded", 
             fs->fs_path);
         return 0;
@@ -542,7 +542,7 @@ FailedSystemCallExit:
 
         if (listen_handle == INVALID_HANDLE_VALUE) 
         {
-            ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
+            log_message(ENCRYPT_LOG_CRIT,
                 "FastCGIENC: can't exec server \"%s\", CreateNamedPipe() failed", 
                 fs->fs_path);
             goto CLEANUP;
@@ -564,7 +564,7 @@ FailedSystemCallExit:
     rv = cgi_build_command(&command, &argv, &r, tp, &e_info);
     if (rv != APR_SUCCESS) 
     {
-        ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_CRIT,
             "FastCGIENC: don't know how to spawn cmd child process: %s", 
             fs->fs_path);
         goto CLEANUP;
@@ -642,7 +642,7 @@ CLEANUP:
     process->terminationEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
     if (process->terminationEvent == NULL)
     {
-        ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_CRIT,
             "FastCGIENC: can't create termination event for server \"%s\", "
             "CreateEvent() failed", fs->fs_path);
         goto CLEANUP;
@@ -667,7 +667,7 @@ CLEANUP:
 
         if (listen_handle == INVALID_HANDLE_VALUE) 
         {
-            ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
+            log_message(ENCRYPT_LOG_CRIT,
                 "FastCGIENC: can't exec server \"%s\", CreateNamedPipe() failed", fs->fs_path);
             goto CLEANUP;
         }
@@ -690,7 +690,7 @@ CLEANUP:
     fileType = ap_get_win32_interpreter(&r, &interpreter);
 
     if (fileType == eFileTypeUNKNOWN) {
-        ap_log_error(FCGI_LOG_ERR_NOERRNO, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_ERR,
             "FastCGIENC: %s is not executable; ensure interpreted scripts have "
             "\"#!\" as their first line", 
             fs->fs_path);
@@ -802,7 +802,7 @@ static void reduce_privileges(void)
         struct passwd *ent = getpwuid(uid);
 
         if (ent == NULL) {
-            ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
+            log_message(ENCRYPT_LOG_ALERT,
                 "FastCGIENC: process manager exiting, getpwuid(%u) couldn't determine user name, "
                 "you probably need to modify the User directive", (unsigned)uid);
             exit(1);
@@ -814,7 +814,7 @@ static void reduce_privileges(void)
 
     /* Change Group */
     if (setgid(ap_group_id) == -1) {
-        ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_ALERT,
             "FastCGIENC: process manager exiting, setgid(%u) failed", (unsigned)ap_group_id);
         exit(1);
     }
@@ -823,7 +823,7 @@ static void reduce_privileges(void)
 
     /* Initialize supplementary groups */
     if (initgroups(name, ap_group_id) == -1) {
-        ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_ALERT,
             "FastCGIENC: process manager exiting, initgroups(%s,%u) failed",
             name, (unsigned)ap_group_id);
         exit(1);
@@ -833,14 +833,14 @@ static void reduce_privileges(void)
     /* Change User */
     if (fcgi_wrapper) {
         if (seteuid_user() == -1) {
-            ap_log_error(FCGI_LOG_ALERT_NOERRNO, fcgi_apache_main_server,
+            log_message(ENCRYPT_LOG_ALERT,
                 "FastCGIENC: process manager exiting, failed to reduce privileges");
             exit(1);
         }
     }
     else {
         if (setuid(ap_user_id) == -1) {
-            ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
+            log_message(ENCRYPT_LOG_ALERT,
                 "FastCGIENC: process manager exiting, setuid(%u) failed", (unsigned)ap_user_id);
             exit(1);
         }
@@ -872,7 +872,7 @@ static void schedule_start(fcgi_server *s, int proc)
     FCGIDBG3("scheduling_start: %s (%d)", s->fs_path, proc);
     s->procs[proc].state = FCGI_START_STATE;
     if (proc == dynamicMaxClassProcs - 1) {
-        ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_WARN,
             "FastCGIENC: scheduled the %sstart of the last (dynamic) server "
             "\"%s\" process: reached dynamicMaxClassProcs (%d)",
             s->procs[proc].pid ? "re" : "", s->fs_path, dynamicMaxClassProcs);
@@ -947,10 +947,10 @@ static void dynamic_read_msgs(int read_ready)
     rc = read(fcgi_pm_pipe[0], (void *)(buf + buflen), FCGI_MSGS_BUFSIZE - buflen);
     if (rc <= 0) {
         if (!caughtSigTerm) {
-            ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server, 
+            log_message(ENCRYPT_LOG_ALERT, 
                 "FastCGIENC: read() from pipe failed (%d)", rc);
             if (rc == 0) {
-                ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server, 
+                log_message(ENCRYPT_LOG_ALERT, 
                     "FastCGIENC: the PM is shutting down, Apache seems to have disappeared - bye");
                 caughtSigTerm = TRUE;
             }
@@ -971,7 +971,7 @@ static void dynamic_read_msgs(int read_ready)
 
     if (rc != WAIT_OBJECT_0 && rc != WAIT_ABANDONED) 
     {
-        ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_ALERT,
             "FastCGIENC: failed to aquire the dynamic mbox mutex - something is broke?!");
         return;
     }
@@ -981,7 +981,7 @@ static void dynamic_read_msgs(int read_ready)
 
     if (! ReleaseMutex(fcgi_dynamic_mbox_mutex)) 
     {
-        ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_ALERT,
             "FastCGIENC: failed to release the dynamic mbox mutex - something is broke?!");
     }
 
@@ -1047,7 +1047,7 @@ static void dynamic_read_msgs(int read_ready)
 	FCGIDBG7("read_job: %c %s %s %s %lu %lu", opcode, execName, user, group, q_usec, req_usec);
 
         if (scan_failed) {
-            ap_log_error(FCGI_LOG_ERR_NOERRNO, fcgi_apache_main_server,
+            log_message(ENCRYPT_LOG_ERR,
                 "FastCGIENC: bogus message, sscanf() failed: \"%s\"", ptr1);
             goto NextJob;
         }
@@ -1076,7 +1076,7 @@ static void dynamic_read_msgs(int read_ready)
 
             if (mutex == NULL)
             {
-                ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
+                log_message(ENCRYPT_LOG_ALERT,
                     "FastCGIENC: can't create accept mutex "
                     "for (dynamic) server \"%s\"", cjob->fs_path);
                 goto BagNewServer;
@@ -1133,7 +1133,7 @@ static void dynamic_read_msgs(int read_ready)
             err = fcgi_util_socket_make_domain_addr(tp, (struct sockaddr_un **)&s->socket_addr,
                                           &s->socket_addr_len, s->socket_path);
             if (err) {
-                ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
+                log_message(ENCRYPT_LOG_CRIT,
                     "FastCGIENC: can't create (dynamic) server \"%s\": %s", execName, err);
                 goto BagNewServer;
             }
@@ -1149,7 +1149,7 @@ static void dynamic_read_msgs(int read_ready)
                     struct passwd *pw = getpwnam(&user[1]);
 
                     if (!pw) {
-                        ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
+                        log_message(ENCRYPT_LOG_CRIT,
                             "FastCGIENC: can't create (dynamic) server \"%s\": can't get uid/gid for wrapper: getpwnam(%s) failed",
                             execName, &user[1]);
                         goto BagNewServer;
@@ -1167,7 +1167,7 @@ static void dynamic_read_msgs(int read_ready)
                     s->uid = (uid_t)atol(user);
                     pw = getpwuid(s->uid);
                     if (!pw) {
-                        ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
+                        log_message(ENCRYPT_LOG_CRIT,
                             "FastCGIENC: can't create (dynamic) server \"%s\": can't get uid/gid for wrapper: getwpuid(%ld) failed",
                             execName, (long)s->uid);
                         goto BagNewServer;
@@ -1229,8 +1229,8 @@ static void dynamic_read_msgs(int read_ready)
 
                     if (do_restart)
                     {
-                        ap_log_error(FCGI_LOG_WARN_NOERRNO, 
-                            fcgi_apache_main_server, "FastCGIENC: restarting "
+                        log_message(ENCRYPT_LOG_WARN, 
+                            "FastCGIENC: restarting "
                             "old server \"%s\" processes, newer version "
                             "found", app_path);
                     }
@@ -1318,7 +1318,7 @@ static void dynamic_read_msgs(int read_ready)
                      * terminated beforehand, probably need
                      * to increase ProcessSlack parameter
                      */
-                    ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
+                    log_message(ENCRYPT_LOG_WARN,
                         "FastCGIENC: can't schedule the start of another (dynamic) server \"%s\" process: "
                         "exceeded dynamicMaxProcs (%d)", s->fs_path, dynamicMaxProcs);
                     goto NextJob;
@@ -1386,7 +1386,7 @@ BagNewServer:
 
 #ifndef WIN32
     if (ptr1 == buf) {
-        ap_log_error(FCGI_LOG_ERR_NOERRNO, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_ERR,
             "FastCGIENC: really bogus message: \"%s\"", ptr1);
         ptr1 += strlen(buf);
     }
@@ -1506,7 +1506,7 @@ static void dynamic_kill_idle_fs_procs(void)
 
             if (youngest != -1)
             {
-                ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
+                log_message(ENCRYPT_LOG_WARN,
                     "FastCGIENC: (dynamic) server \"%s\" (pid %ld) termination signaled",
                     s->fs_path, (long) s->procs[youngest].pid);
 
@@ -1604,7 +1604,7 @@ void child_wait_thread_main(void *dummy) {
                             }
                         }
 
-                        ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
+                        log_message(ENCRYPT_LOG_WARN,
                             "FastCGIENC:%s server \"%s\" (pid %d) terminated with exit with status '%d'",
                             (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
                             s->fs_path, (long) s->procs[i].pid, exitStatus);
@@ -1638,26 +1638,26 @@ static void setup_signals(void)
     sa.sa_flags = 0;
 
     if (sigaction(SIGTERM, &sa, NULL) < 0) {
-        ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_ALERT,
         "sigaction(SIGTERM) failed");
     }
     /* httpd restart */
     if (sigaction(SIGHUP, &sa, NULL) < 0) {
-        ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_ALERT,
         "sigaction(SIGHUP) failed");
     }
     /* httpd graceful restart */
     if (sigaction(SIGUSR1, &sa, NULL) < 0) {
-        ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_ALERT,
         "sigaction(SIGUSR1) failed");
     }
     /* read messages from request handlers - kill interval expired */
     if (sigaction(SIGALRM, &sa, NULL) < 0) {
-        ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_ALERT,
         "sigaction(SIGALRM) failed");
     }
     if (sigaction(SIGCHLD, &sa, NULL) < 0) {
-        ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_ALERT,
         "sigaction(SIGCHLD) failed");
     }
 }
@@ -1698,7 +1698,7 @@ void fcgi_pm_main(void *dummy)
     setup_signals();
 
     if (fcgi_wrapper) {
-        ap_log_error(FCGI_LOG_NOTICE_NOERRNO, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_NOTICE,
             "FastCGIENC: wrapper mechanism enabled (wrapper: %s)", fcgi_wrapper);
     }
 #endif
@@ -1723,14 +1723,14 @@ void fcgi_pm_main(void *dummy)
 
     if (child_wait_thread == (HANDLE) -1)
     {
-        ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_ALERT,
             "FastCGIENC: failed to create process manager's wait thread!");
     }
 
-    ap_log_error(FCGI_LOG_NOTICE_NOERRNO, fcgi_apache_main_server,
+    log_message(ENCRYPT_LOG_NOTICE,
         "FastCGIENC: process manager initialized");
 #else
-    ap_log_error(FCGI_LOG_NOTICE_NOERRNO, fcgi_apache_main_server,
+    log_message(ENCRYPT_LOG_NOTICE,
         "FastCGIENC: process manager initialized (pid %ld)", (long) getpid());
 #endif
 
@@ -1808,7 +1808,7 @@ void fcgi_pm_main(void *dummy)
                         {
                             s->bad = 0;
                             s->numFailures = 0;
-                            ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
+                            log_message(ENCRYPT_LOG_WARN,
                                 "FastCGIENC:%s server \"%s\" has remained"
                                 " running for more than %d seconds, its restart"
                                 " interval has been restored to %d seconds",
@@ -1830,7 +1830,7 @@ void fcgi_pm_main(void *dummy)
                             if (j >= numChildren)
                             {
                                 s->bad = 1;
-                                ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
+                                log_message(ENCRYPT_LOG_WARN,
                                     "FastCGIENC:%s server \"%s\" has failed to remain"
                                     " running for %d seconds given %d attempts, its restart"
                                     " interval has been backed off to %d seconds",
@@ -1842,7 +1842,7 @@ void fcgi_pm_main(void *dummy)
                             {
                                 s->bad = 0;
                                 s->numFailures = 0;
-                                ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
+                                log_message(ENCRYPT_LOG_WARN,
                                     "FastCGIENC:%s server \"%s\" has remained"
                                     " running for more than %d seconds, its restart"
                                     " interval has been restored to %d seconds",
@@ -1882,7 +1882,7 @@ void fcgi_pm_main(void *dummy)
 #endif
                         s->procs[i].pid = spawn_fs_process(s, &s->procs[i]);
                         if (s->procs[i].pid <= 0) {
-                            ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
+                            log_message(ENCRYPT_LOG_CRIT,
                                 "FastCGIENC: can't start%s server \"%s\": spawn_fs_process() failed",
                                 (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
                                 s->fs_path);
@@ -1910,14 +1910,14 @@ void fcgi_pm_main(void *dummy)
                         s->procs[i].state = FCGI_RUNNING_STATE;
 
                         if (fcgi_wrapper) {
-                            ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
+                            log_message(ENCRYPT_LOG_WARN,
                                 "FastCGIENC:%s server \"%s\" (uid %ld, gid %ld) %sstarted (pid %ld)",
                                 (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
                                 s->fs_path, (long) s->uid, (long) s->gid,
                                 restart ? "re" : "", (long) s->procs[i].pid);
                         }
                         else {
-                            ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
+                            log_message(ENCRYPT_LOG_WARN,
                                 "FastCGIENC:%s server \"%s\" %sstarted (pid %ld)",
                                 (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
                                 s->fs_path, restart ? "re" : "", (long) s->procs[i].pid);
@@ -2036,13 +2036,13 @@ ChildFound:
             }
 
             if (WIFEXITED(waitStatus)) {
-                ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
+                log_message(ENCRYPT_LOG_WARN,
                     "FastCGIENC:%s server \"%s\" (pid %ld) terminated by calling exit with status '%d'",
                     (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
                     s->fs_path, (long) childPid, WEXITSTATUS(waitStatus));
             }
             else if (WIFSIGNALED(waitStatus)) {
-                ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
+                log_message(ENCRYPT_LOG_WARN,
                     "FastCGIENC:%s server \"%s\" (pid %ld) terminated due to uncaught signal '%d' (%s)%s",
                     (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
                     s->fs_path, (long) childPid, WTERMSIG(waitStatus), get_signal_text(waitStatus),
@@ -2053,7 +2053,7 @@ ChildFound:
 #endif
             }
             else if (WIFSTOPPED(waitStatus)) {
-                ap_log_error(FCGI_LOG_WARN_NOERRNO, fcgi_apache_main_server,
+                log_message(ENCRYPT_LOG_WARN,
                     "FastCGIENC:%s server \"%s\" (pid %ld) stopped due to uncaught signal '%d' (%s)",
                     (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
                     s->fs_path, (long) childPid, WTERMSIG(waitStatus), get_signal_text(waitStatus));
@@ -2068,7 +2068,7 @@ ChildFound:
 
         if (dwRet == WAIT_FAILED) {
             /* There is something seriously wrong here */
-            ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
+            log_message(ENCRYPT_LOG_CRIT,
                 "FastCGIENC: WaitForMultipleObjects() failed on event handles -- pm is shuting down");
                 bTimeToDie = TRUE;
         }
@@ -2107,7 +2107,7 @@ ChildFound:
             continue;
         }
         else if (dwRet == TERM_EVENT) {
-            ap_log_error(FCGI_LOG_INFO_NOERRNO, fcgi_apache_main_server, 
+            log_message(ENCRYPT_LOG_INFO, 
                 "FastCGIENC: Termination event received process manager shutting down");
             
             bTimeToDie = TRUE;
@@ -2117,7 +2117,7 @@ ChildFound:
         }
         else {
             /* Have an received an unknown event - should not happen */
-            ap_log_error(FCGI_LOG_CRIT, fcgi_apache_main_server,
+            log_message(ENCRYPT_LOG_CRIT,
                 "FastCGIENC: WaitForMultipleobjects() return an unrecognized event");
             
             bTimeToDie = TRUE;
@@ -2150,7 +2150,7 @@ int fcgi_pm_add_job(fcgi_pm_job *new_job)
 
     if (rv != WAIT_OBJECT_0 && rv != WAIT_ABANDONED) 
     {
-        ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_ALERT,
             "FastCGIENC: failed to aquire the dynamic mbox mutex - something is broke?!");
         return -1;
     }
@@ -2160,7 +2160,7 @@ int fcgi_pm_add_job(fcgi_pm_job *new_job)
 
     if (! ReleaseMutex(fcgi_dynamic_mbox_mutex)) 
     {
-        ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
+        log_message(ENCRYPT_LOG_ALERT,
             "FastCGIENC: failed to release the dynamic mbox mutex - something is broke?!");
     }
 

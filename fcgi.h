@@ -478,13 +478,13 @@ typedef struct
 #endif /* !APACHE2 */
 
 #ifdef FCGI_DEBUG
-#define FCGIDBG1(a)              ap_log_error(FCGI_LOG_DEBUG,fcgi_apache_main_server,a);
-#define FCGIDBG2(a,b)            ap_log_error(FCGI_LOG_DEBUG,fcgi_apache_main_server,a,b);
-#define FCGIDBG3(a,b,c)          ap_log_error(FCGI_LOG_DEBUG,fcgi_apache_main_server,a,b,c);
-#define FCGIDBG4(a,b,c,d)        ap_log_error(FCGI_LOG_DEBUG,fcgi_apache_main_server,a,b,c,d);
-#define FCGIDBG5(a,b,c,d,e)      ap_log_error(FCGI_LOG_DEBUG,fcgi_apache_main_server,a,b,c,d,e);
-#define FCGIDBG6(a,b,c,d,e,f)    ap_log_error(FCGI_LOG_DEBUG,fcgi_apache_main_server,a,b,c,d,e,f);
-#define FCGIDBG7(a,b,c,d,e,f,g)  ap_log_error(FCGI_LOG_DEBUG,fcgi_apache_main_server,a,b,c,d,e,f,g);
+#define FCGIDBG1(a)              log_message(ENCRYPT_LOG_DEBUG,a);
+#define FCGIDBG2(a,b)            log_message(ENCRYPT_LOG_DEBUG,a,b);
+#define FCGIDBG3(a,b,c)          log_message(ENCRYPT_LOG_DEBUG,a,b,c);
+#define FCGIDBG4(a,b,c,d)        log_message(ENCRYPT_LOG_DEBUG,a,b,c,d);
+#define FCGIDBG5(a,b,c,d,e)      log_message(ENCRYPT_LOG_DEBUG,a,b,c,d,e);
+#define FCGIDBG6(a,b,c,d,e,f)    log_message(ENCRYPT_LOG_DEBUG,a,b,c,d,e,f);
+#define FCGIDBG7(a,b,c,d,e,f,g)  log_message(ENCRYPT_LOG_DEBUG,a,b,c,d,e,f,g);
 #else
 #define FCGIDBG1(a)
 #define FCGIDBG2(a,b)

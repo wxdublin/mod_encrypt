@@ -7,19 +7,18 @@
 #include "fcgi.h"
 #include "log.h"
 
-void log_message(int log_level, const char *key_word1, const char *log_message1, const char *key_word2, const char *log_message2)
+void log_message(int log_level, const char *fmt, ...)
 {
-	char buffer[128];
+	va_list ap;
+	char headbuffer[128];
+	char msgbuffer[1024];
 
 	time_t rawtime;
 	struct tm * timeinfo;
 	char timebuf[64];
 	struct timeb timer_msec;
 	long long int timestamp_msec;
-
-	apr_status_t rv;  
 	apr_file_t *dest_fp = NULL; 
-	apr_size_t len;
 
 	// check parameter
 	if (!fcgi_logfp || !fcgi_logpath)
@@ -40,67 +39,42 @@ void log_message(int log_level, const char *key_word1, const char *log_message1,
 
 	switch (log_level)
 	{
-	case ENCRYPT_LOG_ERROR:
-		sprintf(buffer, "\n%s,%03lld [ERROR] ", timebuf, timestamp_msec);
+	case ENCRYPT_LOG_EMERG:
+		sprintf(headbuffer, "\n%s,%03lld [EMERG] ", timebuf, timestamp_msec);
 		break;
-	case ENCRYPT_LOG_WARNING:
-		sprintf(buffer, "\n%s,%03lld [WARN]  ", timebuf, timestamp_msec);
+	case ENCRYPT_LOG_ALERT:
+		sprintf(headbuffer, "\n%s,%03lld [ALERT] ", timebuf, timestamp_msec);
+		break;
+	case ENCRYPT_LOG_CRIT:
+		sprintf(headbuffer, "\n%s,%03lld [CRIT]  ", timebuf, timestamp_msec);
+		break;
+	case ENCRYPT_LOG_ERR:
+		sprintf(headbuffer, "\n%s,%03lld [ERROR] ", timebuf, timestamp_msec);
+		break;
+	case ENCRYPT_LOG_WARN:
+		sprintf(headbuffer, "\n%s,%03lld [WARN]  ", timebuf, timestamp_msec);
+		break;
+	case ENCRYPT_LOG_NOTICE:
+		sprintf(headbuffer, "\n%s,%03lld [NOTICE]", timebuf, timestamp_msec);
 		break;
 	case ENCRYPT_LOG_INFO:
-		sprintf(buffer, "\n%s,%03lld [INFO]  ", timebuf, timestamp_msec);
+		sprintf(headbuffer, "\n%s,%03lld [INFO]  ", timebuf, timestamp_msec);
 		break;
-	case ENCRYPT_LOG_TRACK:
-		sprintf(buffer, "\n%s,%03lld [TRACK] ", timebuf, timestamp_msec);
+	case ENCRYPT_LOG_DEBUG:
+		sprintf(headbuffer, "\n%s,%03lld [DEBUG] ", timebuf, timestamp_msec);
 		break;
 	default:
 		return;
 	}
+	
+	va_start(ap, fmt);
+	vsprintf(msgbuffer, fmt, ap);
+	va_end(ap);
 
 	// file operation
-	len = strlen(buffer);
-	rv = apr_file_write(dest_fp, buffer, &len);  
-	if (rv != APR_SUCCESS) {  
-		goto done;  
-	}
-	if (key_word1)
-	{
-		len = strlen(key_word1);
-		rv = apr_file_write(dest_fp, key_word1, &len);  
-		if (rv != APR_SUCCESS) {  
-			goto done;  
-		}
-	}
-	if (log_message1)
-	{
-		len = 1;
-		rv = apr_file_write(dest_fp, " ", &len);  
-		len = strlen(log_message1);
-		rv = apr_file_write(dest_fp, log_message1, &len);  
-		if (rv != APR_SUCCESS) {  
-			goto done;  
-		}
-	}
-	if (key_word2)
-	{
-		len = 2;
-		rv = apr_file_write(dest_fp, ", ", &len);  
-		len = strlen(key_word2);
-		rv = apr_file_write(dest_fp, key_word2, &len);  
-		if (rv != APR_SUCCESS) {  
-			goto done;  
-		}
-	}
-	if (log_message2)
-	{
-		len = 1;
-		rv = apr_file_write(dest_fp, " ", &len);  
-		len = strlen(log_message2);
-		rv = apr_file_write(dest_fp, log_message2, &len);  
-		if (rv != APR_SUCCESS) {  
-			goto done;  
-		}
-	}
+	apr_file_printf(dest_fp, "%s %s", headbuffer, msgbuffer);
+	
+	
 
-done:  
 	return;
 }

@@ -733,8 +733,7 @@ const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const cha
     
     if (mutex == NULL)
     {
-        ap_log_error(FCGI_LOG_ALERT, fcgi_apache_main_server,
-            "FastCGIENC: CreateMutex() failed");
+		log_message(ENCRYPT_LOG_ALERT, "FastCGIENC: CreateMutex() failed");
         return "failed to create FastCGIENC application accept mutex";
     }
     
@@ -850,8 +849,7 @@ const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const cha
     }
     else if (s->user || s->group)
     {
-        ap_log_error(FCGI_LOG_WARN, cmd->server, "FastCGIENC: there is no "
-                     "fastcgi wrapper set, user/group options are ignored");
+		log_message(ENCRYPT_LOG_WARN, "FastCGIENC: there is no fastcgi wrapper set, user/group options are ignored");
     }
 
     if ((err = fcgi_util_fs_set_uid_n_gid(p, s, s->uid, s->gid)))
@@ -1043,8 +1041,7 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
     }
     else if (s->user || s->group)
     {
-        ap_log_error(FCGI_LOG_WARN, cmd->server, "FastCGIENC: there is no "
-                     "fastcgi wrapper set, user/group options are ignored");
+		log_message(ENCRYPT_LOG_WARN, "FastCGIENC: there is no fastcgi wrapper set, user/group options are ignored");
     }
 
     if ((err = fcgi_util_fs_set_uid_n_gid(p, s, s->uid, s->gid)))
@@ -1329,8 +1326,8 @@ const char *fcgi_config_set_logpath(cmd_parms *cmd, void *dummy, const char *arg
 	if (arg2)
 	{
 		fcgi_loglevel = atoi(arg2);
-		if ((fcgi_loglevel < ENCRYPT_LOG_ERROR) || (fcgi_loglevel > ENCRYPT_LOG_TRACK))
-			fcgi_loglevel = ENCRYPT_LOG_ERROR;
+		if ((fcgi_loglevel < ENCRYPT_LOG_EMERG) || (fcgi_loglevel > ENCRYPT_LOG_DEBUG))
+			fcgi_loglevel = ENCRYPT_LOG_DEBUG;
 	}
 	
 	return NULL;

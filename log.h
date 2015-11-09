@@ -5,11 +5,15 @@
 #ifndef _LOG_H__
 #define _LOG_H__
 
-#define ENCRYPT_LOG_ERROR		0
-#define ENCRYPT_LOG_WARNING		1
-#define ENCRYPT_LOG_INFO		2
-#define ENCRYPT_LOG_TRACK		3
+#define ENCRYPT_LOG_EMERG		0
+#define ENCRYPT_LOG_ALERT		1
+#define ENCRYPT_LOG_CRIT		2
+#define ENCRYPT_LOG_ERR			3
+#define ENCRYPT_LOG_WARN		4
+#define ENCRYPT_LOG_NOTICE		5
+#define ENCRYPT_LOG_INFO		6
+#define ENCRYPT_LOG_DEBUG		7
 
-void log_message(int log_level, const char *key_word1, const char *log_message1, const char *key_word2, const char *log_message2);
+void log_message(int log_level, const char *fmt, ...);
 
 #endif // _LOG_H__

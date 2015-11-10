@@ -21,15 +21,32 @@
 #include "key.h"
 
 ////////////////////////////////////////////////////////////////////////// 
+static unsigned char gTestKeyData[] = \
+"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwx"\
+"yzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv"\
+"wxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrst"\
+"uvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr"\
+"stuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnop"\
+"qrstuv";
+static int gTestKeyLen = 256;
 
 int InitEncrypt(fcgi_crypt * encryptor)
 {
-	// get encrypt key from memcache or auth key server
-	if (encryptor->dataKeyLength == 0)
+	if (!fcgi_authserver || !fcgi_masterkeyserver || !fcgi_datakeyserver)
 	{
-		// get active key
- 		if (key_active_request(encryptor) < 0)
- 			return -1;
+		// only for testing without key servers
+		memcpy(encryptor->dataKey, gTestKeyData, gTestKeyLen);
+		encryptor->dataKeyLength = gTestKeyLen;
+	} 
+	else
+	{
+		// get encrypt key from memcache or auth key server
+		if (encryptor->dataKeyLength == 0)
+		{
+			// get active key
+			if (key_active_request(encryptor) < 0)
+				return -1;
+		}
 	}
 	
 	// Initialize encrypt module
@@ -44,14 +61,23 @@ int InitEncrypt(fcgi_crypt * encryptor)
 
 int InitDecrypt(fcgi_crypt * decryptor)
 {
-	// get decrypt key from memcache or auth key server
-	if (decryptor->dataKeyLength == 0)
+	if (!fcgi_authserver || !fcgi_masterkeyserver || !fcgi_datakeyserver)
 	{
-		// get active key
- 		if (key_old_request(decryptor) < 0)
- 			return -1;
+		// only for testing without key servers
+		memcpy(decryptor->dataKey, gTestKeyData, gTestKeyLen);
+		decryptor->dataKeyLength = gTestKeyLen;
 	}
-
+	else
+	{
+		// get decrypt key from memcache or auth key server
+		if (decryptor->dataKeyLength == 0)
+		{
+			// get active key
+			if (key_old_request(decryptor) < 0)
+				return -1;
+		}
+	}
+	
 	// Initialize encrypt module
 	decryptor->crypt = InitAesCtr((unsigned char *)decryptor->dataKey, decryptor->dataKeyLength);
 	if (decryptor->crypt == NULL)

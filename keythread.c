@@ -671,7 +671,7 @@ int key_thread_init(void)
 	// check parameters
 	if (!fcgi_username || !fcgi_password || !fcgi_authserver || !fcgi_masterkeyserver || !fcgi_datakeyserver)
 	{
-		return 0;
+		return -1;
 	}
 
 	// create key thread

@@ -339,11 +339,6 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env,
 		mkidlen = strlen(fr->encryptor.masterKeyId);
 		dkidlen = strlen(fr->encryptor.dataKeyId);
 
-		if ((mkidlen == 0) || (dkidlen == 0))
-		{
-			return FALSE;
-		}
-
 		encaplen = (46 + usermdLen + mkidlen + dkidlen) * 2;
 
 		encapbuff = malloc(encaplen);

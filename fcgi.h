@@ -536,6 +536,7 @@ const char *fcgi_config_set_decrypt(cmd_parms *cmd, void *dummy, const char *arg
 const char *fcgi_config_set_authserver(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_masterkeyserver(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_datakeyserver(cmd_parms *cmd, void *dummy, const char *arg);
+const char *fcgi_config_set_keystring(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_username(cmd_parms *cmd, void *dummy, const char *arg);
 const char *fcgi_config_set_password(cmd_parms *cmd, void *dummy, const char *arg);
 
@@ -690,6 +691,8 @@ extern BOOL fcgi_decrypt_flag;					/* decrypt flag */
 extern char *fcgi_authserver;				/* FastCGI Auth Server */
 extern char *fcgi_masterkeyserver;			/* FastCGI Master Key Server */
 extern char *fcgi_datakeyserver;			/* FastCGI Data Key Server */
+
+extern char *fcgi_cryptkeystring;			/* FastCGI Key string if unavailable keyserver */
 
 extern char *fcgi_username;					/* FastCGI User Name */
 extern char *fcgi_password;					/* FastCGI Password */

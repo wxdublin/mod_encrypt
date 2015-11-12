@@ -39,6 +39,7 @@ This is the simple example how to use mod_encyrpt :
           FastCgiEncAuthServer 52.25.196.147
           FastCgiEncMasterKeyServer 52.25.196.147
           FastCgiEncDataKeyServer 52.25.196.147
+	  FastCgiEncKeyString testkeystring
           FastCgiEncMemcachedServer 127.0.0.1:11211
           FastCgiEncUserName test_user
           FastCgiEncPassword test_password
@@ -84,6 +85,13 @@ Default: FastCgiEncDataKeyServer NONE
 Context: server config  
 
 Config Data key server name or IP address.  
+
+##### FastCgiEncKeyString
+Syntax: FastCgiEncKeyString keystring  
+Default: FastCgiEncKeyString NONE  
+Context: server config  
+
+Config Encryption/Decryption key string if key server is not set.  
 
 #### Directives for memcached
 ##### FastCgiEncMemcachedServer

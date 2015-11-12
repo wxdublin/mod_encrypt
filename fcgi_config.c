@@ -1461,6 +1461,24 @@ const char *fcgi_config_set_datakeyserver(cmd_parms *cmd, void *dummy, const cha
 }
 
 /*******************************************************************************
+ * Set Crypt Key String.
+ */
+const char *fcgi_config_set_keystring(cmd_parms *cmd, void *dummy, const char *arg)
+{
+    const char *err = NULL;
+
+    err = ap_check_cmd_context(cmd, GLOBAL_ONLY);
+    if (err)
+    {
+        return err;
+    }
+
+	fcgi_cryptkeystring = ap_getword_conf(cmd->pool, &arg);
+
+	return NULL;
+}
+
+/*******************************************************************************
  * Set Sproxyd User Name.
  */
 const char *fcgi_config_set_username(cmd_parms *cmd, void *dummy, const char *arg)

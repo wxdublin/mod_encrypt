@@ -131,12 +131,14 @@ apr_file_t *fcgi_logfp = NULL;
 char *fcgi_memcached_server = "127.0.0.1";	/* hostname or IP for memcached server */
 unsigned short fcgi_memcached_port = 11211;	/* port number for memcached server */
 
-BOOL fcgi_encrypt_flag = TRUE;					/* encrypt flag */
-BOOL fcgi_decrypt_flag = TRUE;					/* decrypt flag */
+BOOL fcgi_encrypt_flag = TRUE;				/* encrypt flag */
+BOOL fcgi_decrypt_flag = TRUE;				/* decrypt flag */
 
 char *fcgi_authserver = NULL;				/* FastCGI Auth Server */
 char *fcgi_masterkeyserver = NULL;			/* FastCGI Master Key Server */
 char *fcgi_datakeyserver = NULL;			/* FastCGI Data Key Server */
+
+char *fcgi_cryptkeystring = NULL;			/* FastCGI Key string if unavailable keyserver */
 
 char *fcgi_username = NULL;					/* default FastCGI User Name */
 char *fcgi_password = NULL;					/* default FastCGI Password */
@@ -3201,6 +3203,8 @@ static const command_rec fastcgi_cmds[] =
 	AP_INIT_TAKE1("FastCgiEncAuthServer",  fcgi_config_set_authserver, NULL, RSRC_CONF, NULL),
 	AP_INIT_TAKE1("FastCgiEncMasterKeyServer",  fcgi_config_set_masterkeyserver, NULL, RSRC_CONF, NULL),
 	AP_INIT_TAKE1("FastCgiEncDataKeyServer",  fcgi_config_set_datakeyserver, NULL, RSRC_CONF, NULL),
+
+	AP_INIT_TAKE1("FastCgiEncKeyString",  fcgi_config_set_keystring, NULL, RSRC_CONF, NULL),
 
 	AP_INIT_TAKE1("FastCgiEncUserName",  fcgi_config_set_username, NULL, RSRC_CONF, NULL),
 	AP_INIT_TAKE1("FastCgiEncPassword",  fcgi_config_set_password, NULL, RSRC_CONF, NULL),

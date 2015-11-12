@@ -21,22 +21,24 @@
 #include "key.h"
 
 ////////////////////////////////////////////////////////////////////////// 
-static unsigned char gTestKeyData[] = \
-"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwx"\
-"yzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv"\
-"wxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrst"\
-"uvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr"\
-"stuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnop"\
-"qrstuv";
-static int gTestKeyLen = 256;
 
 int InitEncrypt(fcgi_crypt * encryptor)
 {
 	if (!fcgi_authserver || !fcgi_masterkeyserver || !fcgi_datakeyserver)
 	{
-		// only for testing without key servers
-		memcpy(encryptor->dataKey, gTestKeyData, gTestKeyLen);
-		encryptor->dataKeyLength = gTestKeyLen;
+		if (fcgi_cryptkeystring)
+		{
+			// only for testing without key servers
+			encryptor->dataKeyLength = strlen(fcgi_cryptkeystring);
+			if (encryptor->dataKeyLength > 256)
+				encryptor->dataKeyLength = 256;
+			
+			memcpy(encryptor->dataKey, fcgi_cryptkeystring, encryptor->dataKeyLength);
+		}
+		else
+		{
+			return -1;
+		}
 	} 
 	else
 	{
@@ -63,9 +65,19 @@ int InitDecrypt(fcgi_crypt * decryptor)
 {
 	if (!fcgi_authserver || !fcgi_masterkeyserver || !fcgi_datakeyserver)
 	{
-		// only for testing without key servers
-		memcpy(decryptor->dataKey, gTestKeyData, gTestKeyLen);
-		decryptor->dataKeyLength = gTestKeyLen;
+		if (fcgi_cryptkeystring)
+		{
+			// only for testing without key servers
+			decryptor->dataKeyLength = strlen(fcgi_cryptkeystring);
+			if (decryptor->dataKeyLength > 256)
+				decryptor->dataKeyLength = 256;
+
+			memcpy(decryptor->dataKey, fcgi_cryptkeystring, decryptor->dataKeyLength);
+		}
+		else
+		{
+			return -1;
+		}
 	}
 	else
 	{

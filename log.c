@@ -11,7 +11,7 @@ void log_message(int log_level, const char *fmt, ...)
 {
 	va_list ap;
 	char headbuffer[128];
-	char msgbuffer[1024];
+	char msgbuffer[4096];
 
 	time_t rawtime;
 	struct tm * timeinfo;

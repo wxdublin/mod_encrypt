@@ -386,8 +386,7 @@ static apcb_t init_module(server_rec *s, pool *p)
 
     fcgi_pm_pid = ap_spawn_child(p, fcgi_pm_main, NULL, kill_only_once, NULL, NULL, NULL);
     if (fcgi_pm_pid <= 0) {
-        log_message(ENCRYPT_LOG_ALERT, s,
-            "FastCGIENC: can't start the process manager, spawn_child() failed");
+        log_message(ENCRYPT_LOG_ALERT, "FastCGIENC: can't start the process manager, spawn_child() failed");
     }
 
 #endif /* !APACHE2 */

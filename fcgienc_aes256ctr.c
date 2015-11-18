@@ -3,7 +3,7 @@
 #include <openssl/err.h>
 #include <string.h>
 
-#include "aes256ctr.h"
+#include "fcgienc_aes256ctr.h"
 
 #define CRYPT_CBC_MODE	0
 #define CRYPT_CTR_MODE	1

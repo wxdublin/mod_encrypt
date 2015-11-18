@@ -1,8 +1,8 @@
 /*
- * $Id: fcgi_util.c,v 1.32 2007/09/23 16:33:29 robs Exp $
+ * Baze Ilijoskki <bazeilijoskki@gmail.com>
  */
 
-#include "fcgi.h"
+#include "fcgienc.h"
 
 #ifdef WIN32
 #pragma warning( disable : 4100 )
@@ -20,7 +20,7 @@
 #endif
 
 uid_t 
-fcgi_util_get_server_uid(const server_rec * const s)
+fcgienc_util_get_server_uid(const server_rec * const s)
 {
 #if defined(WIN32) 
     return (uid_t) 0;
@@ -34,7 +34,7 @@ fcgi_util_get_server_uid(const server_rec * const s)
 }
 
 uid_t 
-fcgi_util_get_server_gid(const server_rec * const s)
+fcgienc_util_get_server_gid(const server_rec * const s)
 {
 #if defined(WIN32) 
     return (uid_t) 0;
@@ -52,7 +52,7 @@ fcgi_util_get_server_gid(const server_rec * const s)
  * allocating the hash - use temp storage, and dup it if you need to keep it.
  */
 char *
-fcgi_util_socket_hash_filename(pool *p, const char *path,
+fcgienc_util_socket_hash_filename(pool *p, const char *path,
         const char *user, const char *group)
 {
     char *buf = ap_pstrcat(p, path, user, group, NULL);
@@ -106,7 +106,7 @@ static char * make_full_path(pool *a, const char *src1, const char *src2)
  * the dynamic directory.  Result is allocated in pool p.
  */
 const char *
-fcgi_util_socket_make_path_absolute(pool * const p, 
+fcgienc_util_socket_make_path_absolute(pool * const p, 
         const char *const file, const int dynamic)
 {
 #ifdef APACHE2
@@ -119,7 +119,7 @@ fcgi_util_socket_make_path_absolute(pool * const p,
     }
     else
     {
-        const char * parent_dir = dynamic ? fcgi_dynamic_dir : fcgi_socket_dir;
+        const char * parent_dir = dynamic ? fcgienc_dynamic_dir : fcgienc_socket_dir;
         return (const char *) make_full_path(p, parent_dir, file);
     }
 }
@@ -131,7 +131,7 @@ fcgi_util_socket_make_path_absolute(pool * const p,
  * struct sockaddr_un also allocated from p, pass it preallocated (!=NULL).
  */
 const char *
-fcgi_util_socket_make_domain_addr(pool *p, struct sockaddr_un **socket_addr,
+fcgienc_util_socket_make_domain_addr(pool *p, struct sockaddr_un **socket_addr,
         int *socket_addr_len, const char *socket_path)
 {
     int socket_pathLen = strlen(socket_path);
@@ -190,7 +190,7 @@ convert_string_to_in_addr(const char * const hostname, struct in_addr * const ad
  * struct sockaddr_in also allocated from p, pass it preallocated (!=NULL).
  */
 const char *
-fcgi_util_socket_make_inet_addr(pool *p, struct sockaddr_in **socket_addr,
+fcgienc_util_socket_make_inet_addr(pool *p, struct sockaddr_in **socket_addr,
         int *socket_addr_len, const char *host, unsigned short port)
 {
     if (*socket_addr == NULL)
@@ -219,7 +219,7 @@ fcgi_util_socket_make_inet_addr(pool *p, struct sockaddr_in **socket_addr,
  * Determine if a process with uid/gid can access a file with mode permissions.
  */
 const char *
-fcgi_util_check_access(pool *tp, 
+fcgienc_util_check_access(pool *tp, 
         const char * const path, const struct stat *statBuf, 
         const int mode, const uid_t uid, const gid_t gid)
 {
@@ -301,20 +301,20 @@ fcgi_util_check_access(pool *tp,
 
 
 /*******************************************************************************
- * Find a FastCGIENC server with a matching fs_path, and if fcgi_wrapper is
+ * Find a FastCGIENC server with a matching fs_path, and if fcgienc_wrapper is
  * enabled with matching uid and gid.
  */
-fcgi_server *
-fcgi_util_fs_get_by_id(const char *ePath, uid_t uid, gid_t gid)
+fcgienc_server *
+fcgienc_util_fs_get_by_id(const char *ePath, uid_t uid, gid_t gid)
 {
-    char path[FCGI_MAXPATH];
-    fcgi_server *s;
+    char path[FCGIENC_MAXPATH];
+    fcgienc_server *s;
 
     /* @@@ This should now be done in the loop below */
-    ap_cpystrn(path, ePath, FCGI_MAXPATH);
+    ap_cpystrn(path, ePath, FCGIENC_MAXPATH);
     ap_no2slash(path);
 
-    for (s = fcgi_servers; s != NULL; s = s->next) {
+    for (s = fcgienc_servers; s != NULL; s = s->next) {
         int i;
         const char *fs_path = s->fs_path;
         for (i = 0; fs_path[i] && path[i]; ++i) {
@@ -326,7 +326,7 @@ fcgi_util_fs_get_by_id(const char *ePath, uid_t uid, gid_t gid)
             continue;
         }
         if (path[i] == '\0' || path[i] == '/') {
-        if (fcgi_wrapper == NULL || (uid == s->uid && gid == s->gid))
+        if (fcgienc_wrapper == NULL || (uid == s->uid && gid == s->gid))
             return s;
         }
     }
@@ -334,21 +334,21 @@ fcgi_util_fs_get_by_id(const char *ePath, uid_t uid, gid_t gid)
 }
 
 /*******************************************************************************
- * Find a FastCGIENC server with a matching fs_path, and if fcgi_wrapper is
+ * Find a FastCGIENC server with a matching fs_path, and if fcgienc_wrapper is
  * enabled with matching user and group.
  */
-fcgi_server *
-fcgi_util_fs_get(const char *ePath, const char *user, const char *group)
+fcgienc_server *
+fcgienc_util_fs_get(const char *ePath, const char *user, const char *group)
 {
-    char path[FCGI_MAXPATH];
-    fcgi_server *s;
+    char path[FCGIENC_MAXPATH];
+    fcgienc_server *s;
 
-    ap_cpystrn(path, ePath, FCGI_MAXPATH);
+    ap_cpystrn(path, ePath, FCGIENC_MAXPATH);
     ap_no2slash(path);
     
-    for (s = fcgi_servers; s != NULL; s = s->next) {
+    for (s = fcgienc_servers; s != NULL; s = s->next) {
         if (strcmp(s->fs_path, path) == 0) {
-            if (fcgi_wrapper == NULL)
+            if (fcgienc_wrapper == NULL)
                 return s;
 
             if (strcmp(user, s->user) == 0 
@@ -362,7 +362,7 @@ fcgi_util_fs_get(const char *ePath, const char *user, const char *group)
 }
 
 const char *
-fcgi_util_fs_is_path_ok(pool * const p, const char * const fs_path, struct stat *finfo)
+fcgienc_util_fs_is_path_ok(pool * const p, const char * const fs_path, struct stat *finfo)
 {
     const char *err;
 
@@ -379,17 +379,17 @@ fcgi_util_fs_is_path_ok(pool * const p, const char * const fs_path, struct stat 
         return ap_psprintf(p, "script is a directory!");
     
     /* Let the wrapper determine what it can and can't execute */
-    if (! fcgi_wrapper)
+    if (! fcgienc_wrapper)
     {
 #ifdef WIN32
-        err = fcgi_util_check_access(p, fs_path, finfo, _S_IEXEC, fcgi_user_id, fcgi_group_id);
+        err = fcgienc_util_check_access(p, fs_path, finfo, _S_IEXEC, fcgienc_user_id, fcgienc_group_id);
 #else
-        err = fcgi_util_check_access(p, fs_path, finfo, X_OK, fcgi_user_id, fcgi_group_id);
+        err = fcgienc_util_check_access(p, fs_path, finfo, X_OK, fcgienc_user_id, fcgienc_group_id);
 #endif
         if (err) {
             return ap_psprintf(p,
                 "access for server (uid %ld, gid %ld) not allowed: %s",
-                (long)fcgi_user_id, (long)fcgi_group_id, err);
+                (long)fcgienc_user_id, (long)fcgienc_group_id, err);
         }
     }
     
@@ -401,23 +401,22 @@ fcgi_util_fs_is_path_ok(pool * const p, const char * const fs_path, struct stat 
 /*******************************************************************************
  * Allocate a new FastCGIENC server record from pool p with default values.
  */
-fcgi_server *
-fcgi_util_fs_new(pool *p)
+fcgienc_server *
+fcgienc_util_fs_new(pool *p)
 {
-    fcgi_server *s = (fcgi_server *) ap_pcalloc(p, sizeof(fcgi_server));
+    fcgienc_server *s = (fcgienc_server *) ap_pcalloc(p, sizeof(fcgienc_server));
 
     /* Initialize anything who's init state is not zeroizzzzed */
-    s->listenQueueDepth = FCGI_DEFAULT_LISTEN_Q;
-    s->appConnectTimeout = FCGI_DEFAULT_APP_CONN_TIMEOUT;
-    s->idle_timeout = FCGI_DEFAULT_IDLE_TIMEOUT;
+    s->listenQueueDepth = FCGIENC_DEFAULT_LISTEN_Q;
+    s->appConnectTimeout = FCGIENC_DEFAULT_APP_CONN_TIMEOUT;
+    s->idle_timeout = FCGIENC_DEFAULT_IDLE_TIMEOUT;
     s->initStartDelay = DEFAULT_INIT_START_DELAY;
-    s->restartDelay = FCGI_DEFAULT_RESTART_DELAY;
-	s->minServerLife = FCGI_DEFAULT_MIN_SERVER_LIFE;
-    s->maxFailedStarts = FCGI_DEFAULT_MAX_FAILED_STARTS;
+    s->restartDelay = FCGIENC_DEFAULT_RESTART_DELAY;
+	s->minServerLife = FCGIENC_DEFAULT_MIN_SERVER_LIFE;
     s->restartOnExit = FALSE;
     s->directive = APP_CLASS_UNKNOWN;
-    s->processPriority = FCGI_DEFAULT_PRIORITY;
-    s->envp = &fcgi_empty_env;
+    s->processPriority = FCGIENC_DEFAULT_PRIORITY;
+    s->envp = &fcgienc_empty_env;
     
 #ifdef WIN32
     s->listenFd = (int) INVALID_HANDLE_VALUE;
@@ -432,24 +431,24 @@ fcgi_util_fs_new(pool *p)
  * Add the server to the linked list of FastCGIENC servers.
  */
 void 
-fcgi_util_fs_add(fcgi_server *s)
+fcgienc_util_fs_add(fcgienc_server *s)
 {
-    s->next = fcgi_servers;
-    fcgi_servers = s;
+    s->next = fcgienc_servers;
+    fcgienc_servers = s;
 }
 
 /*******************************************************************************
  * Configure uid, gid, user, group, username for wrapper.
  */
 const char *
-fcgi_util_fs_set_uid_n_gid(pool *p, fcgi_server *s, uid_t uid, gid_t gid)
+fcgienc_util_fs_set_uid_n_gid(pool *p, fcgienc_server *s, uid_t uid, gid_t gid)
 {
 #ifndef WIN32
 
     struct passwd *pw;
     struct group  *gr;
 
-    if (fcgi_wrapper == NULL)
+    if (fcgienc_wrapper == NULL)
         return NULL;
 
     if (uid == 0 || gid == 0) {
@@ -486,7 +485,7 @@ fcgi_util_fs_set_uid_n_gid(pool *p, fcgi_server *s, uid_t uid, gid_t gid)
  * Allocate an array of ServerProcess records.
  */
 ServerProcess *
-fcgi_util_fs_create_procs(pool *p, int num)
+fcgienc_util_fs_create_procs(pool *p, int num)
 {
     int i;
     ServerProcess *proc = (ServerProcess *)ap_pcalloc(p, sizeof(ServerProcess) * num);
@@ -497,12 +496,12 @@ fcgi_util_fs_create_procs(pool *p, int num)
         proc[i].terminationEvent = INVALID_HANDLE_VALUE;
 #endif
         proc[i].pid = 0;
-        proc[i].state = FCGI_READY_STATE;
+        proc[i].state = FCGIENC_READY_STATE;
     }
     return proc;
 }
 
-int fcgi_util_ticks(struct timeval * tv) 
+int fcgienc_util_ticks(struct timeval * tv) 
 {
 #ifdef WIN32
     /* millisecs is sufficent granularity */

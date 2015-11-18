@@ -1,27 +1,7 @@
 /*
  * mod_encrypt.c --
  *
- *      Apache server module for FastCGIENC.
- *
- *  $Id: mod_encrypt.c,v 1.169 2008/11/09 14:31:03 robs Exp $
- *
- *  Copyright (c) 1995-1996 Open Market, Inc.
- *
- *  See the file "LICENSE.TERMS" for information on usage and redistribution
- *  of this file, and for a DISCLAIMER OF ALL WARRANTIES.
- *
- *
- *  Patches for Apache-1.1 provided by
- *  Ralf S. Engelschall
- *  <rse@en.muc.de>
- *
- *  Patches for Linux provided by
- *  Scott Langley
- *  <langles@vote-smart.org>
- *
- *  Patches for suexec handling by
- *  Brian Grossman <brian@SoftHome.net> and
- *  Rob Saccoccio <robs@ipass.net>
+ *  Baze Ilijoskki <bazeilijoskki@gmail.com>
  */
 
 /*
@@ -35,7 +15,7 @@
  *   a restart (as Apache does every time it starts.)
  *
  *   In order to allow the process manager to properly cleanup the
- *   running fastcgi processes (without being disturbed by Apache),
+ *   running encrypt processes (without being disturbed by Apache),
  *   an intermediate process was introduced.  The diagram is as follows;
  *
  *   ApacheWS --> MiddleProc --> ProcMgr --> FCGI processes
@@ -69,7 +49,11 @@
  */
 
 
-#include "fcgi.h"
+#include "fcgienc.h"
+#include "fcgienc_log.h"
+#include "fcgienc_keythread.h"
+#include "fcgienc_crypt.h"
+#include "fcgienc_encap.h"
 
 #ifdef APACHE2
 #ifndef WIN32
@@ -97,90 +81,80 @@ do {                                                  \
 } while (0)
 #endif
 
-#include "log.h"
-#include "keythread.h"
-#include "crypt.h"
-#include "encap.h"
-
-#ifdef APACHE24
-module AP_MODULE_DECLARE_DATA encrypt_module;
-#endif
-
 /*
  * Global variables
  */
 
-pool *fcgi_config_pool;            	 /* the config pool */
-server_rec *fcgi_apache_main_server;
+pool *fcgienc_config_pool;            	 /* the config pool */
+server_rec *fcgienc_apache_main_server;
 
-const char *fcgi_wrapper = NULL;          /* wrapper path */
-uid_t fcgi_user_id;                       /* the run uid of Apache & PM */
-gid_t fcgi_group_id;                      /* the run gid of Apache & PM */
+const char *fcgienc_wrapper = NULL;          /* wrapper path */
+uid_t fcgienc_user_id;                       /* the run uid of Apache & PM */
+gid_t fcgienc_group_id;                      /* the run gid of Apache & PM */
 
-fcgi_server *fcgi_servers = NULL;         /* AppClasses */
+fcgienc_server *fcgienc_servers = NULL;         /* AppClasses */
 
-char *fcgi_socket_dir = NULL;             /* default FastCgiEncIpcDir */
+char *fcgienc_socket_dir = NULL;             /* default FastCgiEncIpcDir */
 
-char *fcgi_dynamic_dir = NULL;            /* directory for the dynamic
-                                           * fastcgi apps' sockets */
+char *fcgienc_dynamic_dir = NULL;            /* directory for the dynamic
+                                           * encrypt apps' sockets */
 
-char *fcgi_logpath = NULL;					/* default FastCGI Log file path */
-int fcgi_loglevel = ENCRYPT_LOG_DEBUG;		/* default FastCGI Log level */
-apr_file_t *fcgi_logfp = NULL;
+char *fcgienc_logpath = NULL;					/* FastCGIENC Log file path */
+int fcgienc_loglevel = ENCRYPT_LOG_DEBUG;		/* FastCGIENC Log level */
+apr_file_t *fcgienc_logfp = NULL;
 
-char *fcgi_memcached_server = "127.0.0.1";	/* hostname or IP for memcached server */
-unsigned short fcgi_memcached_port = 11211;	/* port number for memcached server */
+char *fcgienc_memcached_server = "127.0.0.1";
+unsigned short fcgienc_memcached_port = 11211;
 
-BOOL fcgi_encrypt_flag = TRUE;				/* encrypt flag */
-BOOL fcgi_decrypt_flag = TRUE;				/* decrypt flag */
+BOOL fcgienc_encrypt_flag = TRUE;				/* encrypt flag */
+BOOL fcgienc_decrypt_flag = TRUE;				/* decrypt flag */
 
-char *fcgi_authserver = NULL;				/* FastCGI Auth Server */
-char *fcgi_masterkeyserver = NULL;			/* FastCGI Master Key Server */
-char *fcgi_datakeyserver = NULL;			/* FastCGI Data Key Server */
+char *fcgienc_authserver = NULL;				/* FastCGIENC Auth Server */
+char *fcgienc_masterkeyserver = NULL;			/* FastCGIENC Master Key Server */
+char *fcgienc_datakeyserver = NULL;				/* FastCGIENC Data Key Server */
 
-char *fcgi_cryptkeystring = NULL;			/* FastCGI Key string if unavailable keyserver */
+char *fcgienc_cryptkeystring = NULL;			/* FastCGIENC Key string if unavailable keyserver */
 
-char *fcgi_username = NULL;					/* default FastCGI User Name */
-char *fcgi_password = NULL;					/* default FastCGI Password */
+char *fcgienc_username = NULL;					/* FastCGIENC User Name */
+char *fcgienc_password = NULL;					/* FastCGIENC Password */
 
 #ifdef WIN32
 
 #pragma warning( disable : 4706 4100 4127)
-fcgi_pm_job *fcgi_dynamic_mbox = NULL;
-HANDLE *fcgi_dynamic_mbox_mutex = NULL;
-HANDLE fcgi_pm_thread = INVALID_HANDLE_VALUE;
+fcgienc_pm_job *fcgienc_dynamic_mbox = NULL;
+HANDLE *fcgienc_dynamic_mbox_mutex = NULL;
+HANDLE fcgienc_pm_thread = INVALID_HANDLE_VALUE;
 
 #else
 
-int fcgi_pm_pipe[2] = { -1, -1 };
-pid_t fcgi_pm_pid = -1;
+int fcgienc_pm_pipe[2] = { -1, -1 };
+pid_t fcgienc_pm_pid = -1;
 
 #endif
 
-char *fcgi_empty_env = NULL;
+char *fcgienc_empty_env = NULL;
 
-u_int dynamicMaxProcs = FCGI_DEFAULT_MAX_PROCS;
-int   dynamicMinProcs = FCGI_DEFAULT_MIN_PROCS;
-int dynamicMaxClassProcs = FCGI_DEFAULT_MAX_CLASS_PROCS;
-u_int dynamicKillInterval = FCGI_DEFAULT_KILL_INTERVAL;
-u_int dynamicUpdateInterval = FCGI_DEFAULT_UPDATE_INTERVAL;
-float dynamicGain = FCGI_DEFAULT_GAIN;
-int dynamicThreshold1 = FCGI_DEFAULT_THRESHOLD_1;
-int dynamicThresholdN = FCGI_DEFAULT_THRESHOLD_N;
-u_int dynamicPleaseStartDelay = FCGI_DEFAULT_START_PROCESS_DELAY;
-u_int dynamicAppConnectTimeout = FCGI_DEFAULT_APP_CONN_TIMEOUT;
-char **dynamicEnvp = &fcgi_empty_env;
-u_int dynamicProcessSlack = FCGI_DEFAULT_PROCESS_SLACK;
-int dynamicAutoRestart = FCGI_DEFAULT_RESTART_DYNAMIC;
-int dynamicAutoUpdate = FCGI_DEFAULT_AUTOUPDATE;
-int dynamicFlush = FCGI_FLUSH;
-u_int dynamicListenQueueDepth = FCGI_DEFAULT_LISTEN_Q;
+u_int dynamicMaxProcs = FCGIENC_DEFAULT_MAX_PROCS;
+int   dynamicMinProcs = FCGIENC_DEFAULT_MIN_PROCS;
+int dynamicMaxClassProcs = FCGIENC_DEFAULT_MAX_CLASS_PROCS;
+u_int dynamicKillInterval = FCGIENC_DEFAULT_KILL_INTERVAL;
+u_int dynamicUpdateInterval = FCGIENC_DEFAULT_UPDATE_INTERVAL;
+float dynamicGain = FCGIENC_DEFAULT_GAIN;
+int dynamicThreshold1 = FCGIENC_DEFAULT_THRESHOLD_1;
+int dynamicThresholdN = FCGIENC_DEFAULT_THRESHOLD_N;
+u_int dynamicPleaseStartDelay = FCGIENC_DEFAULT_START_PROCESS_DELAY;
+u_int dynamicAppConnectTimeout = FCGIENC_DEFAULT_APP_CONN_TIMEOUT;
+char **dynamicEnvp = &fcgienc_empty_env;
+u_int dynamicProcessSlack = FCGIENC_DEFAULT_PROCESS_SLACK;
+int dynamicAutoRestart = FCGIENC_DEFAULT_RESTART_DYNAMIC;
+int dynamicAutoUpdate = FCGIENC_DEFAULT_AUTOUPDATE;
+int dynamicFlush = FCGIENC_FLUSH;
+u_int dynamicListenQueueDepth = FCGIENC_DEFAULT_LISTEN_Q;
 u_int dynamicInitStartDelay = DEFAULT_INIT_START_DELAY;
-u_int dynamicRestartDelay = FCGI_DEFAULT_RESTART_DELAY;
+u_int dynamicRestartDelay = FCGIENC_DEFAULT_RESTART_DELAY;
 array_header *dynamic_pass_headers = NULL;
-u_int dynamic_idle_timeout = FCGI_DEFAULT_IDLE_TIMEOUT;
-int dynamicMinServerLife = FCGI_DEFAULT_MIN_SERVER_LIFE;
-int dynamicMaxFailedStarts = FCGI_DEFAULT_MAX_FAILED_STARTS;
+u_int dynamic_idle_timeout = FCGIENC_DEFAULT_IDLE_TIMEOUT;
+int dynamicMinServerLife = FCGIENC_DEFAULT_MIN_SERVER_LIFE;
 
 /*******************************************************************************
  * Construct a message and write it to the pm_pipe.
@@ -190,26 +164,26 @@ static void send_to_pm(const char id, const char * const fs_path,
      const unsigned long req_usec)
 {
 #ifdef WIN32
-    fcgi_pm_job *job = NULL;
+    fcgienc_pm_job *job = NULL;
 
-    if (!(job = (fcgi_pm_job *) malloc(sizeof(fcgi_pm_job))))
+    if (!(job = (fcgienc_pm_job *) malloc(sizeof(fcgienc_pm_job))))
        return;
 #else
     static int failed_count = 0;
     int buflen = 0;
-    char buf[FCGI_MAX_MSG_LEN];
+    char buf[FCGIENC_MAX_MSG_LEN];
 #endif
 
-    if (strlen(fs_path) > FCGI_MAXPATH) {
-        log_message(ENCRYPT_LOG_ERR, 
-            "FastCGIENC: the path \"%s\" is too long (>%d) for a dynamic server", fs_path, FCGI_MAXPATH);
+    if (strlen(fs_path) > FCGIENC_MAXPATH) {
+        ap_log_error(FCGIENC_LOG_ERR_NOERRNO, fcgienc_apache_main_server, 
+            "FastCGIENC: the path \"%s\" is too long (>%d) for a dynamic server", fs_path, FCGIENC_MAXPATH);
         return;
     }
 
     switch(id) {
 
-    case FCGI_SERVER_START_JOB:
-    case FCGI_SERVER_RESTART_JOB:
+    case FCGIENC_SERVER_START_JOB:
+    case FCGIENC_SERVER_RESTART_JOB:
 #ifdef WIN32
         job->id = id;
         job->fs_path = strdup(fs_path);
@@ -222,7 +196,7 @@ static void send_to_pm(const char id, const char * const fs_path,
 #endif
         break;
 
-    case FCGI_REQUEST_TIMEOUT_JOB:
+    case FCGIENC_REQUEST_TIMEOUT_JOB:
 #ifdef WIN32
         job->id = id;
         job->fs_path = strdup(fs_path);
@@ -235,7 +209,7 @@ static void send_to_pm(const char id, const char * const fs_path,
 #endif
         break;
 
-    case FCGI_REQUEST_COMPLETE_JOB:
+    case FCGIENC_REQUEST_COMPLETE_JOB:
 #ifdef WIN32
         job->id = id;
         job->fs_path = strdup(fs_path);
@@ -250,19 +224,19 @@ static void send_to_pm(const char id, const char * const fs_path,
     }
 
 #ifdef WIN32
-    if (fcgi_pm_add_job(job)) return;
+    if (fcgienc_pm_add_job(job)) return;
 
-    SetEvent(fcgi_event_handles[MBOX_EVENT]);
+    SetEvent(fcgienc_event_handles[MBOX_EVENT]);
 #else
-    ASSERT(buflen <= FCGI_MAX_MSG_LEN);
+    ASSERT(buflen <= FCGIENC_MAX_MSG_LEN);
 
     /* There is no apache flag or function that can be used to id
      * restart/shutdown pending so ignore the first few failures as
      * once it breaks it will stay broke */
-    if (write(fcgi_pm_pipe[1], (const void *)buf, buflen) != buflen 
+    if (write(fcgienc_pm_pipe[1], (const void *)buf, buflen) != buflen 
         && failed_count++ > 10) 
     {
-        log_message(ENCRYPT_LOG_WARN,
+        ap_log_error(FCGIENC_LOG_WARN, fcgienc_apache_main_server,
             "FastCGIENC: write() to PM failed (ignore if a restart or shutdown is pending)");
     }
 #endif
@@ -297,7 +271,7 @@ static apcb_t init_module(server_rec *s, pool *p)
 
     /* Register to reset to default values when the config pool is cleaned */
     ap_block_alarms();
-    ap_register_cleanup(p, NULL, fcgi_config_reset_globals, ap_null_cleanup);
+    ap_register_cleanup(p, NULL, fcgienc_config_reset_globals, ap_null_cleanup);
     ap_unblock_alarms();
 
 #ifdef APACHE2
@@ -306,28 +280,28 @@ static apcb_t init_module(server_rec *s, pool *p)
     ap_add_version_component("mod_encrypt/" MOD_ENCRYPT_VERSION);
 #endif
 
-    fcgi_config_set_fcgi_uid_n_gid(1);
+    fcgienc_config_set_fcgienc_uid_n_gid(1);
 
     /* keep these handy */
-    fcgi_config_pool = p;
-    fcgi_apache_main_server = s;
+    fcgienc_config_pool = p;
+    fcgienc_apache_main_server = s;
 
 #ifdef WIN32
-    if (fcgi_socket_dir == NULL)
-        fcgi_socket_dir = DEFAULT_SOCK_DIR;
-    fcgi_dynamic_dir = ap_pstrcat(p, fcgi_socket_dir, "dynamic", NULL);
+    if (fcgienc_socket_dir == NULL)
+        fcgienc_socket_dir = DEFAULT_SOCK_DIR;
+    fcgienc_dynamic_dir = ap_pstrcat(p, fcgienc_socket_dir, "dynamic", NULL);
 #else
 
-    if (fcgi_socket_dir == NULL)
-        fcgi_socket_dir = ap_server_root_relative(p, DEFAULT_SOCK_DIR);
+    if (fcgienc_socket_dir == NULL)
+        fcgienc_socket_dir = ap_server_root_relative(p, DEFAULT_SOCK_DIR);
 
     /* Create Unix/Domain socket directory */
-    if ((err = fcgi_config_make_dir(p, fcgi_socket_dir)))
-        log_message(ENCRYPT_LOG_ERR, "FastCGIENC: %s", err);
+    if ((err = fcgienc_config_make_dir(p, fcgienc_socket_dir)))
+        ap_log_error(FCGIENC_LOG_ERR, s, "FastCGIENC: %s", err);
 
     /* Create Dynamic directory */
-    if ((err = fcgi_config_make_dynamic_dir(p, 1)))
-        log_message(ENCRYPT_LOG_ERR, "FastCGIENC: %s", err);
+    if ((err = fcgienc_config_make_dynamic_dir(p, 1)))
+        ap_log_error(FCGIENC_LOG_ERR, s, "FastCGIENC: %s", err);
 
     /* Spawn the PM only once.  Under Unix, Apache calls init() routines
      * twice, once before detach() and once after.  Win32 doesn't detach.
@@ -354,8 +328,8 @@ static apcb_t init_module(server_rec *s, pool *p)
 #endif
 
     /* Create the pipe for comm with the PM */
-    if (pipe(fcgi_pm_pipe) < 0) {
-        log_message(ENCRYPT_LOG_ERR, "FastCGIENC: pipe() failed");
+    if (pipe(fcgienc_pm_pipe) < 0) {
+        ap_log_error(FCGIENC_LOG_ERR, s, "FastCGIENC: pipe() failed");
     }
 
     /* Start the Process Manager */
@@ -370,7 +344,7 @@ static apcb_t init_module(server_rec *s, pool *p)
         if (rv == APR_INCHILD)
         {
             /* child */
-            fcgi_pm_main(NULL);
+            fcgienc_pm_main(NULL);
             exit(1);
         }
         else if (rv != APR_INPARENT)
@@ -384,22 +358,25 @@ static apcb_t init_module(server_rec *s, pool *p)
     }
 #else /* !APACHE2 */
 
-    fcgi_pm_pid = ap_spawn_child(p, fcgi_pm_main, NULL, kill_only_once, NULL, NULL, NULL);
-    if (fcgi_pm_pid <= 0) {
-        log_message(ENCRYPT_LOG_ALERT, "FastCGIENC: can't start the process manager, spawn_child() failed");
+    fcgienc_pm_pid = ap_spawn_child(p, fcgienc_pm_main, NULL, kill_only_once, NULL, NULL, NULL);
+    if (fcgienc_pm_pid <= 0) {
+        ap_log_error(FCGIENC_LOG_ALERT, s,
+            "FastCGIENC: can't start the process manager, spawn_child() failed");
     }
 
 #endif /* !APACHE2 */
 
-    close(fcgi_pm_pipe[0]);
+    close(fcgienc_pm_pipe[0]);
 
 	/* Initialize Memcache and Key Thread */
 	{
 		int ret;
 
 		/* Create log file */
-		if ((err = fcgi_config_make_logfile(p, fcgi_logpath)))
-			log_message(ENCRYPT_LOG_ERR, "FastCGIENC: %s", err);
+		if (fcgienc_logpath) {
+			if ((err = fcgienc_config_make_logfile(p, fcgienc_logpath)))
+				log_message(ENCRYPT_LOG_ERR, "FastCGIENC: %s", err);
+		}
 
 		// init key thread
 		ret = key_thread_init();
@@ -420,56 +397,56 @@ static apcb_t init_module(server_rec *s, pool *p)
 
 #ifdef WIN32
 #ifdef APACHE2
-static apcb_t fcgi_child_exit(void * dc)
+static apcb_t fcgienc_child_exit(void * dc)
 #else
-static apcb_t fcgi_child_exit(server_rec *dc0, pool *dc1)
+static apcb_t fcgienc_child_exit(server_rec *dc0, pool *dc1)
 #endif 
 {
     /* Signal the PM thread to exit*/
-    SetEvent(fcgi_event_handles[TERM_EVENT]);
+    SetEvent(fcgienc_event_handles[TERM_EVENT]);
 
     /* Waiting on pm thread to exit */
-    WaitForSingleObject(fcgi_pm_thread, INFINITE);
+    WaitForSingleObject(fcgienc_pm_thread, INFINITE);
 
     return APCB_OK;
 }
 #endif /* WIN32 */
 
 #ifdef APACHE2
-static void fcgi_child_init(apr_pool_t * p, server_rec * dc)
+static void fcgienc_child_init(apr_pool_t * p, server_rec * dc)
 #else
-static void fcgi_child_init(server_rec *dc, pool *p)
+static void fcgienc_child_init(server_rec *dc, pool *p)
 #endif
 {
 #ifdef WIN32
     /* Create the MBOX, TERM, and WAKE event handlers */
-    fcgi_event_handles[0] = CreateEvent(NULL, FALSE, FALSE, NULL);
-    if (fcgi_event_handles[0] == NULL) {
-        log_message(ENCRYPT_LOG_ALERT, 
+    fcgienc_event_handles[0] = CreateEvent(NULL, FALSE, FALSE, NULL);
+    if (fcgienc_event_handles[0] == NULL) {
+        ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server, 
             "FastCGIENC: CreateEvent() failed");
     }
-    fcgi_event_handles[1] = CreateEvent(NULL, FALSE, FALSE, NULL);
-    if (fcgi_event_handles[1] == NULL) {
-        log_message(ENCRYPT_LOG_ALERT, 
+    fcgienc_event_handles[1] = CreateEvent(NULL, FALSE, FALSE, NULL);
+    if (fcgienc_event_handles[1] == NULL) {
+        ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server, 
             "FastCGIENC: CreateEvent() failed");
     }
-    fcgi_event_handles[2] = CreateEvent(NULL, FALSE, FALSE, NULL);
-    if (fcgi_event_handles[2] == NULL) {
-        log_message(ENCRYPT_LOG_ALERT, 
+    fcgienc_event_handles[2] = CreateEvent(NULL, FALSE, FALSE, NULL);
+    if (fcgienc_event_handles[2] == NULL) {
+        ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server, 
             "FastCGIENC: CreateEvent() failed");
     }
 
     /* Create the mbox mutex (PM - request threads) */
-    fcgi_dynamic_mbox_mutex = CreateMutex(NULL, FALSE, NULL);
-    if (fcgi_dynamic_mbox_mutex == NULL) {
-        log_message(ENCRYPT_LOG_ALERT, 
+    fcgienc_dynamic_mbox_mutex = CreateMutex(NULL, FALSE, NULL);
+    if (fcgienc_dynamic_mbox_mutex == NULL) {
+        ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server, 
             "FastCGIENC: CreateMutex() failed");
     }
 
     /* Spawn of the process manager thread */
-    fcgi_pm_thread = (HANDLE) _beginthread(fcgi_pm_main, 0, NULL);
-    if (fcgi_pm_thread == (HANDLE) -1) {
-        log_message(ENCRYPT_LOG_ALERT, 
+    fcgienc_pm_thread = (HANDLE) _beginthread(fcgienc_pm_main, 0, NULL);
+    if (fcgienc_pm_thread == (HANDLE) -1) {
+        ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server, 
             "_beginthread() failed to spawn the process manager");
     }
 
@@ -479,8 +456,11 @@ static void fcgi_child_init(server_rec *dc, pool *p)
 		const char *err;
 
 		/* Create log file */
-		if ((err = fcgi_config_make_logfile(p, fcgi_logpath)))
-			log_message(ENCRYPT_LOG_ERR, "FastCGIENC: %s", err);
+		if (fcgienc_logpath)
+		{
+			if ((err = fcgienc_config_make_logfile(p, fcgienc_logpath)))
+				log_message(ENCRYPT_LOG_ERR, "FastCGIENC: %s", err);
+		}
 
 		// init key thread
 		ret = key_thread_init();
@@ -493,8 +473,9 @@ static void fcgi_child_init(server_rec *dc, pool *p)
 			log_message(ENCRYPT_LOG_INFO, "%s", "Started key thread");
 		}
 	}
+
 #ifdef APACHE2
-    apr_pool_cleanup_register(p, NULL, fcgi_child_exit, fcgi_child_exit);
+    apr_pool_cleanup_register(p, NULL, fcgienc_child_exit, fcgienc_child_exit);
 #endif
 #endif
 }
@@ -564,7 +545,7 @@ static char *get_header_line(char *start, int continuation)
 
 #ifdef WIN32
 
-static int set_nonblocking(const fcgi_request * fr, int nonblocking)
+static int set_nonblocking(const fcgienc_request * fr, int nonblocking)
 {
     if (fr->using_npipe_io) 
     {
@@ -573,7 +554,7 @@ static int set_nonblocking(const fcgi_request * fr, int nonblocking)
             DWORD mode = PIPE_NOWAIT | PIPE_READMODE_BYTE;
             if (SetNamedPipeHandleState((HANDLE) fr->fd, &mode, NULL, NULL) == 0)
             {
-		        log_message(ENCRYPT_LOG_ERR,
+		        ap_log_rerror(FCGIENC_LOG_ERR, fr->r,
                     "FastCGIENC: SetNamedPipeHandleState() failed");
                 return -1;
             }
@@ -585,7 +566,7 @@ static int set_nonblocking(const fcgi_request * fr, int nonblocking)
         if (ioctlsocket(fr->fd, FIONBIO, &ioctl_arg) != 0)
         {
             errno = WSAGetLastError();
-            log_message(ENCRYPT_LOG_ERR, 
+            ap_log_rerror(FCGIENC_LOG_ERR_ERRNO, fr->r, 
                 "FastCGIENC: ioctlsocket() failed");
             return -1;
         }
@@ -596,7 +577,7 @@ static int set_nonblocking(const fcgi_request * fr, int nonblocking)
 
 #else
 
-static int set_nonblocking(const fcgi_request * fr, int nonblocking)
+static int set_nonblocking(const fcgienc_request * fr, int nonblocking)
 {
     int nb_flag = 0;
     int fd_flags = fcntl(fr->fd, F_GETFL, 0);
@@ -620,32 +601,11 @@ static int set_nonblocking(const fcgi_request * fr, int nonblocking)
 
 #endif
 
-#ifndef SHUT_RD
-#define SHUT_RD SD_RECEIVE
-#endif
-
-#ifndef SHUT_WR
-#define SHUT_WR SD_SEND
-#endif
-
-#ifndef SHUT_RDWR
-#define SHUT_RDWR SD_BOTH
-#endif
-
-static void shutdown_connection_to_fs(fcgi_request *fr)
-{
-  if (fr->fd >= 0)
-    {
-        set_nonblocking(fr, FALSE);
-        shutdown(fr->fd, SHUT_WR);
-    }
-}
-
 /*******************************************************************************
  * Close the connection to the FastCGIENC server.  This is normally called by
  * do_work(), but may also be called as in request pool cleanup.
  */
-static void close_connection_to_fs(fcgi_request *fr)
+static void close_connection_to_fs(fcgienc_request *fr)
 {
 #ifdef WIN32
 
@@ -682,17 +642,17 @@ static void close_connection_to_fs(fcgi_request *fr)
 
         if (fr->dynamic && fr->keepReadingFromFcgiApp == FALSE) 
         {
-            /* XXX FCGI_REQUEST_COMPLETE_JOB is only sent for requests which complete
+            /* XXX FCGIENC_REQUEST_COMPLETE_JOB is only sent for requests which complete
              * normally WRT the fcgi app.  There is no data sent for
              * connect() timeouts or requests which complete abnormally.
              * KillDynamicProcs() and RemoveRecords() need to be looked at
              * to be sure they can reasonably handle these cases before
              * sending these sort of stats - theres some funk in there.
              */
-            if (fcgi_util_ticks(&fr->completeTime) < 0) 
+            if (fcgienc_util_ticks(&fr->completeTime) < 0) 
             {
                 /* there's no point to aborting the request, just log it */
-                log_message(ENCRYPT_LOG_ERR, "FastCGIENC: can't get time of day");
+                ap_log_error(FCGIENC_LOG_ERR, fr->r->server, "FastCGIENC: can't get time of day");
             }
         }
     }
@@ -732,11 +692,11 @@ static void close_connection_to_fs(fcgi_request *fr)
  *----------------------------------------------------------------------
  */
 
-static const char *process_headers(request_rec *r, fcgi_request *fr)
+static const char *process_headers(request_rec *r, fcgienc_request *fr)
 {
     char *p, *next, *name, *value;
-    int len, flag, newl;
-    int hasLocation = FALSE;
+    int len, flag;
+    int hasContentType, hasStatus, hasLocation;
 
     ASSERT(fr->parseHeader == SCAN_CGI_READING_HEADERS);
 
@@ -750,16 +710,11 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
     p = (char *)fr->header->elts;
     len = fr->header->nelts;
     flag = 0;
-    newl = 1;
     while(len-- && flag < 2) {
-	if (newl && !fr->gotCont && strncasecmp(p, "Status: 100", 11) == 0) {
-		fr->gotCont = 1;
-	}
-	switch(*p) {
+        switch(*p) {
             case '\r':
                 break;
             case '\n':
-		newl = 1;
                 flag++;
                 break;
             case '\0':
@@ -768,7 +723,6 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
                 name = "Invalid Character";
                 goto BadHeader;
             default:
-		newl = 0;
                 flag = 0;
                 break;
         }
@@ -784,6 +738,7 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
      * Parse all the headers.
      */
     fr->parseHeader = SCAN_CGI_FINISHED;
+    hasContentType = hasStatus = hasLocation = FALSE;
     next = (char *)fr->header->elts;
     for(;;) {
         next = get_header_line(name = next, TRUE);
@@ -812,17 +767,25 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
         if (strcasecmp(name, "Status") == 0) {
             int statusValue = strtol(value, NULL, 10);
 
+            if (hasStatus) {
+                goto DuplicateNotAllowed;
+            }
             if (statusValue < 0) {
                 fr->parseHeader = SCAN_CGI_BAD_HEADER;
                 return ap_psprintf(r->pool, "invalid Status '%s'", value);
             }
+            hasStatus = TRUE;
             r->status = statusValue;
             r->status_line = ap_pstrdup(r->pool, value);
             continue;
         }
 
-        if (fr->role == FCGI_RESPONDER) {
+        if (fr->role == FCGIENC_RESPONDER) {
             if (strcasecmp(name, "Content-type") == 0) {
+                if (hasContentType) {
+                    goto DuplicateNotAllowed;
+                }
+                hasContentType = TRUE;
 #ifdef APACHE2                
                 ap_set_content_type(r, value);
 #else
@@ -830,22 +793,14 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 #endif                
                 continue;
             }
-            
-            /* 
-             * Special case headers that should not persist on error 
-             * or across redirects, i.e. use headers_out rather than
-             * err_headers_out.
-             */
 
             if (strcasecmp(name, "Location") == 0) {
+                if (hasLocation) {
+                    goto DuplicateNotAllowed;
+                }
                 hasLocation = TRUE;
-                ap_table_set(r->headers_out, name, value);
+                ap_table_set(r->headers_out, "Location", value);
                 continue;
-            }
-            
-            if (strcasecmp(name, "Content-Length") == 0) {
-                ap_table_set(r->headers_out, name, value);
-            	continue;
             }
 
 			if (strcasecmp(name, "Content-Range") == 0) {
@@ -863,7 +818,7 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
         }
     }
 
-    if (fr->role != FCGI_RESPONDER)
+    if (fr->role != FCGIENC_RESPONDER)
         return NULL;
 
 	/* decrypt parameters */
@@ -901,7 +856,7 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
 
 				log_message(ENCRYPT_LOG_DEBUG, "masterKeyId : %s, dataKeyId : %s", fr->decryptor.masterKeyId, fr->decryptor.dataKeyId);
 
-				if (fcgi_decrypt_flag == TRUE)
+				if (fcgienc_decrypt_flag == TRUE)
 				{
 					InitDecrypt(&fr->decryptor);
 				}
@@ -956,8 +911,8 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
         /* we've got all we want from the server */
         close_connection_to_fs(fr);
         fr->exitStatusSet = 1;
-        fcgi_buf_reset(fr->clientOutputBuffer);
-        fcgi_buf_reset(fr->serverOutputBuffer);
+        fcgienc_buf_reset(fr->clientOutputBuffer);
+        fcgienc_buf_reset(fr->serverOutputBuffer);
         return NULL;
     }
 
@@ -967,14 +922,14 @@ static const char *process_headers(request_rec *r, fcgi_request *fr)
     ASSERT(BufferLength(fr->clientOutputBuffer) == 0);
     
     if (BufferFree(fr->clientOutputBuffer) < len) {
-        fr->clientOutputBuffer = fcgi_buf_new(r->pool, len);
+        fr->clientOutputBuffer = fcgienc_buf_new(r->pool, len);
     }
     
     ASSERT(BufferFree(fr->clientOutputBuffer) >= len);
 
     if (len > 0) {
         int sent;
-        sent = fcgi_buf_add_block(fr->clientOutputBuffer, next, len);
+        sent = fcgienc_buf_add_block(fr->clientOutputBuffer, next, len);
         ASSERT(sent == len);
     }
 
@@ -986,6 +941,10 @@ BadHeader:
         *p = '\0';
     fr->parseHeader = SCAN_CGI_BAD_HEADER;
     return ap_psprintf(r->pool, "malformed header '%s'", name);
+
+DuplicateNotAllowed:
+    fr->parseHeader = SCAN_CGI_BAD_HEADER;
+    return ap_psprintf(r->pool, "duplicate header '%s'", name);
 }
 
 /*
@@ -995,19 +954,19 @@ BadHeader:
  * clients from keeping the FastCGIENC server in processing longer than is
  * necessary.
  */
-static int read_from_client_n_queue(fcgi_request *fr)
+static int read_from_client_n_queue(fcgienc_request *fr)
 {
     char *end;
     int count;
     long int countRead;
 
     while (BufferFree(fr->clientInputBuffer) > 0 || BufferFree(fr->serverOutputBuffer) > 0) {
-        fcgi_protocol_queue_client_buffer(fr);
+        fcgienc_protocol_queue_client_buffer(fr);
 
         if (fr->expectingClientContent <= 0)
             return OK;
 
-        fcgi_buf_get_free_block_info(fr->clientInputBuffer, &end, &count);
+        fcgienc_buf_get_free_block_info(fr->clientInputBuffer, &end, &count);
         if (count == 0)
             return OK;
 
@@ -1015,12 +974,7 @@ static int read_from_client_n_queue(fcgi_request *fr)
         {
             /* set the header scan state to done to prevent logging an error 
              * - hokey approach - probably should be using a unique value */
-
-            /* actually, not setting this here, will set it later,
-               so that we can continue to read the server header if that
-               wasn't done (can happen with 100-continue), so that we
-               can send correct error to client */
-            // fr->parseHeader = SCAN_CGI_FINISHED;
+            fr->parseHeader = SCAN_CGI_FINISHED;
             return -1;
         }
 
@@ -1028,18 +982,17 @@ static int read_from_client_n_queue(fcgi_request *fr)
             fr->expectingClientContent = 0;
         }
         else {
-			if (fcgi_encrypt_flag == TRUE)
-			{
+			if (fcgienc_encrypt_flag == TRUE)
 				CryptDataStream(&fr->encryptor, end, 0, countRead);
-			}
-            fcgi_buf_add_update(fr->clientInputBuffer, countRead);
+
+			fcgienc_buf_add_update(fr->clientInputBuffer, countRead);
             ap_reset_timeout(fr->r);
         }
     }
     return OK;
 }
 
-static int write_to_client(fcgi_request *fr)
+static int write_to_client(fcgienc_request *fr)
 {
     char *begin;
     int count;
@@ -1050,8 +1003,8 @@ static int write_to_client(fcgi_request *fr)
     apr_bucket_alloc_t * const bkt_alloc = fr->r->connection->bucket_alloc;
 #endif
 
-    fcgi_buf_get_block_info(fr->clientOutputBuffer, &begin, &count);
-	if (fcgi_decrypt_flag == TRUE)
+    fcgienc_buf_get_block_info(fr->clientOutputBuffer, &begin, &count);
+	if (fcgienc_decrypt_flag == TRUE)
 	{
 		CryptDataStream(&fr->decryptor, fr->clientOutputBuffer->data, fr->decryptor.offset, count);
 		fr->decryptor.offset = 0;
@@ -1064,7 +1017,7 @@ static int write_to_client(fcgi_request *fr)
      * effectively results in a block (and short packets) - it should
      * be fixed, but I didn't win much support for the idea on new-httpd.
      * So, without patching Apache, the best way to deal with this is
-     * to size the fcgi_bufs to hold all of the script output (within
+     * to size the fcgienc_bufs to hold all of the script output (within
      * reason) so the script can be released from having to wait around
      * for the transmission to the client to complete. */
 
@@ -1093,7 +1046,7 @@ static int write_to_client(fcgi_request *fr)
 #endif
 
     if (rv || fr->r->connection->aborted) {
-        log_message(ENCRYPT_LOG_INFO,
+        ap_log_rerror(FCGIENC_LOG_INFO_NOERRNO, fr->r,
             "FastCGIENC: client stopped connection before send body completed");
         return -1;
     }
@@ -1121,7 +1074,7 @@ static int write_to_client(fcgi_request *fr)
 
         if (rv)
         {
-            log_message(ENCRYPT_LOG_INFO,
+            ap_log_rerror(FCGIENC_LOG_INFO_NOERRNO, fr->r,
                 "FastCGIENC: client stopped connection before send body completed");
             return -1;
         }
@@ -1131,7 +1084,7 @@ static int write_to_client(fcgi_request *fr)
 
 #endif /* !APACHE2 */
 
-    fcgi_buf_toss(fr->clientOutputBuffer, count);
+    fcgienc_buf_toss(fr->clientOutputBuffer, count);
     return OK;
 }
 
@@ -1167,7 +1120,7 @@ get_request_identity(request_rec * const r,
  */
 static void set_uid_n_gid(request_rec *r, const char **user, const char **group)
 {
-    if (fcgi_wrapper == NULL) {
+    if (fcgienc_wrapper == NULL) {
         *user = "-";
         *group = "-";
         return;
@@ -1194,7 +1147,7 @@ static void set_uid_n_gid(request_rec *r, const char **user, const char **group)
     }
 }
 
-static void send_request_complete(fcgi_request *fr)
+static void send_request_complete(fcgienc_request *fr)
 {
     if (fr->completeTime.tv_sec) 
     {
@@ -1203,7 +1156,7 @@ static void send_request_complete(fcgi_request *fr)
         timersub(&fr->queueTime, &fr->startTime, &qtime);
         timersub(&fr->completeTime, &fr->queueTime, &rtime);
         
-        send_to_pm(FCGI_REQUEST_COMPLETE_JOB, fr->fs_path,
+        send_to_pm(FCGIENC_REQUEST_COMPLETE_JOB, fr->fs_path,
             fr->user, fr->group,
             qtime.tv_sec * 1000000 + qtime.tv_usec,
             rtime.tv_sec * 1000000 + rtime.tv_usec);
@@ -1214,7 +1167,7 @@ static void send_request_complete(fcgi_request *fr)
 /*******************************************************************************
  * Connect to the FastCGIENC server.
  */
-static int open_connection_to_fs(fcgi_request *fr)
+static int open_connection_to_fs(fcgienc_request *fr)
 {
     struct timeval  tval;
     fd_set          write_fds, read_fds;
@@ -1231,17 +1184,17 @@ static int open_connection_to_fs(fcgi_request *fr)
     /* Create the connection point */
     if (fr->dynamic) 
     {
-        socket_path = fcgi_util_socket_hash_filename(rp, fr->fs_path, fr->user, fr->group);
-        socket_path = fcgi_util_socket_make_path_absolute(rp, socket_path, 1);
+        socket_path = fcgienc_util_socket_hash_filename(rp, fr->fs_path, fr->user, fr->group);
+        socket_path = fcgienc_util_socket_make_path_absolute(rp, socket_path, 1);
 
 #ifndef WIN32
-        err = fcgi_util_socket_make_domain_addr(rp, (struct sockaddr_un **)&socket_addr,
+        err = fcgienc_util_socket_make_domain_addr(rp, (struct sockaddr_un **)&socket_addr,
                                       &socket_addr_len, socket_path);
         if (err) {
-            log_message(ENCRYPT_LOG_ERR,
+            ap_log_rerror(FCGIENC_LOG_ERR, r,
                 "FastCGIENC: failed to connect to (dynamic) server \"%s\": "
                 "%s", fr->fs_path, err);
-            return FCGI_FAILED;
+            return FCGIENC_FAILED;
         }
 #endif
     } 
@@ -1297,7 +1250,7 @@ static int open_connection_to_fs(fcgi_request *fr)
                         /* 
                          * There's a newer one, request a restart.
                          */
-                        send_to_pm(FCGI_SERVER_RESTART_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
+                        send_to_pm(FCGIENC_SERVER_RESTART_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
 
 #ifdef WIN32
                         Sleep(1000);
@@ -1313,7 +1266,7 @@ static int open_connection_to_fs(fcgi_request *fr)
         {
             int i;
 
-            send_to_pm(FCGI_SERVER_START_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
+            send_to_pm(FCGIENC_SERVER_START_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
         
             /* wait until it looks like its running - this shouldn't take
              * very long at all - the exception is when the sockets are 
@@ -1325,7 +1278,7 @@ static int open_connection_to_fs(fcgi_request *fr)
 #ifdef WIN32
                 Sleep(500);
 
-                fr->fs = fcgi_util_fs_get_by_id(fr->fs_path, 0, 0);
+                fr->fs = fcgienc_util_fs_get_by_id(fr->fs_path, 0, 0);
 
                 if (fr->fs && fr->fs->restartTime)
 #else
@@ -1346,12 +1299,12 @@ static int open_connection_to_fs(fcgi_request *fr)
 
             if (i <= 0)
             {
-                log_message(ENCRYPT_LOG_ALERT,
+                ap_log_rerror(FCGIENC_LOG_ALERT, r,
                     "FastCGIENC: failed to connect to (dynamic) server \"%s\": "
                     "something is seriously wrong, any chance the "
                     "socket/named_pipe directory was removed?, see the "
                     "FastCgiEncIpcDir directive", fr->fs_path);
-                return FCGI_FAILED;
+                return FCGIENC_FAILED;
             }
         }
     }
@@ -1364,7 +1317,7 @@ static int open_connection_to_fs(fcgi_request *fr)
         int rv;
         HANDLE wait_npipe_mutex;
         DWORD interval;
-        DWORD max_connect_time = FCGI_NAMED_PIPE_CONNECT_TIMEOUT;
+        DWORD max_connect_time = FCGIENC_NAMED_PIPE_CONNECT_TIMEOUT;
             
         fr->using_npipe_io = TRUE;
 
@@ -1378,14 +1331,14 @@ static int open_connection_to_fs(fcgi_request *fr)
         }
         else
         {
-            interval = FCGI_NAMED_PIPE_CONNECT_TIMEOUT * 1000;
+            interval = FCGIENC_NAMED_PIPE_CONNECT_TIMEOUT * 1000;
             
             if (fr->fs->appConnectTimeout) {
                 max_connect_time = fr->fs->appConnectTimeout;
             }
         }
 
-        fcgi_util_ticks(&fr->startTime);
+        fcgienc_util_ticks(&fr->startTime);
 
         {
             /* xxx this handle should live somewhere (see CloseHandle()s below too) */
@@ -1398,10 +1351,10 @@ static int open_connection_to_fs(fcgi_request *fr)
         
         if (wait_npipe_mutex == NULL)
         {
-            log_message(ENCRYPT_LOG_ERR,
+            ap_log_rerror(FCGIENC_LOG_ERR, r,
                 "FastCGIENC: failed to connect to server \"%s\": "
                 "can't create the WaitNamedPipe mutex", fr->fs_path);
-            return FCGI_FAILED;
+            return FCGIENC_FAILED;
         }
         
         SetLastError(ERROR_SUCCESS);
@@ -1412,17 +1365,17 @@ static int open_connection_to_fs(fcgi_request *fr)
         {
             if (fr->dynamic) 
             {
-                send_to_pm(FCGI_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
+                send_to_pm(FCGIENC_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
             }
-            log_message(ENCRYPT_LOG_ERR,
+            ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, r,
                 "FastCGIENC: failed to connect to server \"%s\": "
                 "wait for a npipe instance failed", fr->fs_path);
             FCGIDBG3("interval=%d, max_connect_time=%d", interval, max_connect_time);
             CloseHandle(wait_npipe_mutex);
-            return FCGI_FAILED; 
+            return FCGIENC_FAILED; 
         }
         
-        fcgi_util_ticks(&fr->queueTime);
+        fcgienc_util_ticks(&fr->queueTime);
         
         connect_time = fr->queueTime.tv_sec - fr->startTime.tv_sec;
         
@@ -1430,7 +1383,7 @@ static int open_connection_to_fs(fcgi_request *fr)
         {
             if (connect_time >= interval)
             {
-                send_to_pm(FCGI_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
+                send_to_pm(FCGIENC_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
                 FCGIDBG4("connect_time=%d, interval=%d, max_connect_time=%d", connect_time, interval, max_connect_time);
             }
             if (max_connect_time - connect_time < interval)
@@ -1461,15 +1414,15 @@ static int open_connection_to_fs(fcgi_request *fr)
                 {
                     ReleaseMutex(wait_npipe_mutex);
                     CloseHandle(wait_npipe_mutex);
-                    fcgi_util_ticks(&fr->queueTime);
+                    fcgienc_util_ticks(&fr->queueTime);
                     FCGIDBG2("got npipe connect: %s", fr->fs_path);
-                    return FCGI_OK;
+                    return FCGIENC_OK;
                 }
 
                 if (GetLastError() != ERROR_PIPE_BUSY 
                     && GetLastError() != ERROR_FILE_NOT_FOUND) 
                 {
-                    log_message(ENCRYPT_LOG_ERR,
+                    ap_log_rerror(FCGIENC_LOG_ERR, r,
                         "FastCGIENC: failed to connect to server \"%s\": "
                         "CreateFile() failed", fr->fs_path);
                     break; 
@@ -1480,10 +1433,10 @@ static int open_connection_to_fs(fcgi_request *fr)
         
             if (fr->dynamic) 
             {
-                send_to_pm(FCGI_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
+                send_to_pm(FCGIENC_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
             }
 
-            fcgi_util_ticks(&fr->queueTime);
+            fcgienc_util_ticks(&fr->queueTime);
 
             connect_time = fr->queueTime.tv_sec - fr->startTime.tv_sec;
 
@@ -1491,7 +1444,7 @@ static int open_connection_to_fs(fcgi_request *fr)
 
             if (connect_time >= max_connect_time)
             {
-                log_message(ENCRYPT_LOG_ERR,
+                ap_log_rerror(FCGIENC_LOG_ERR, r,
                     "FastCGIENC: failed to connect to server \"%s\": "
                     "CreateFile()/WaitNamedPipe() timed out", fr->fs_path);
                 break;
@@ -1501,7 +1454,7 @@ static int open_connection_to_fs(fcgi_request *fr)
         ReleaseMutex(wait_npipe_mutex);
         CloseHandle(wait_npipe_mutex);
         fr->fd = INVALID_SOCKET;
-        return FCGI_FAILED; 
+        return FCGIENC_FAILED; 
     }
             
 #endif
@@ -1515,20 +1468,20 @@ static int open_connection_to_fs(fcgi_request *fr)
 #else    
     if (fr->fd < 0) {
 #endif
-        log_message(ENCRYPT_LOG_ERR,
+        ap_log_rerror(FCGIENC_LOG_ERR_ERRNO, r,
             "FastCGIENC: failed to connect to server \"%s\": "
             "socket() failed", fr->fs_path);
-        return FCGI_FAILED; 
+        return FCGIENC_FAILED; 
     }
 
 #ifndef WIN32
     if (fr->fd >= FD_SETSIZE) {
-        log_message(ENCRYPT_LOG_ERR,
+        ap_log_rerror(FCGIENC_LOG_ERR, r,
             "FastCGIENC: failed to connect to server \"%s\": "
             "socket file descriptor (%u) is larger than "
             "FD_SETSIZE (%u), you probably need to rebuild Apache with a "
             "larger FD_SETSIZE", fr->fs_path, fr->fd, FD_SETSIZE);
-        return FCGI_FAILED;
+        return FCGIENC_FAILED;
     }
 #endif
 
@@ -1538,24 +1491,21 @@ static int open_connection_to_fs(fcgi_request *fr)
     }
 
     if (fr->dynamic) {
-        fcgi_util_ticks(&fr->startTime);
+        fcgienc_util_ticks(&fr->startTime);
     }
 
     /* Connect */
-    do {
-    	if (connect(fr->fd, (struct sockaddr *) socket_addr, socket_addr_len) == 0) {
-    		goto ConnectionComplete;
-    	}
-    } while (errno == EINTR);    
+    if (connect(fr->fd, (struct sockaddr *)socket_addr, socket_addr_len) == 0)
+        goto ConnectionComplete;
 
 #ifdef WIN32
 
     errno = WSAGetLastError();
     if (errno != WSAEWOULDBLOCK) {
-        log_message(ENCRYPT_LOG_ERR,
+        ap_log_rerror(FCGIENC_LOG_ERR_ERRNO, r,
             "FastCGIENC: failed to connect to server \"%s\": "
             "connect() failed", fr->fs_path);
-        return FCGI_FAILED;
+        return FCGIENC_FAILED;
     }
 
 #else
@@ -1564,16 +1514,16 @@ static int open_connection_to_fs(fcgi_request *fr)
      * With dynamic I can at least make sure the PM knows this is occuring */
     if (fr->dynamic && errno == ECONNREFUSED) {
         /* @@@ This might be better as some other "kind" of message */
-        send_to_pm(FCGI_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
+        send_to_pm(FCGIENC_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
 
         errno = ECONNREFUSED;
     }
 
     if (errno != EINPROGRESS) {
-        log_message(ENCRYPT_LOG_ERR,
+        ap_log_rerror(FCGIENC_LOG_ERR, r,
             "FastCGIENC: failed to connect to server \"%s\": "
             "connect() failed", fr->fs_path);
-        return FCGI_FAILED;
+        return FCGIENC_FAILED;
     }
 
 #endif
@@ -1590,29 +1540,26 @@ static int open_connection_to_fs(fcgi_request *fr)
             tval.tv_sec = dynamicPleaseStartDelay;
             tval.tv_usec = 0;
 
-            do {
-            	status = ap_select(fr->fd + 1, &read_fds, &write_fds, NULL, &tval);
-            } while (status < 0 && errno == EINTR);
-
+            status = ap_select((fr->fd+1), &read_fds, &write_fds, NULL, &tval);
             if (status < 0)
                 break;
 
-            fcgi_util_ticks(&fr->queueTime);
+            fcgienc_util_ticks(&fr->queueTime);
 
             if (status > 0)
                 break;
 
             /* select() timed out */
-            send_to_pm(FCGI_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
+            send_to_pm(FCGIENC_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
         } while ((fr->queueTime.tv_sec - fr->startTime.tv_sec) < (int)dynamicAppConnectTimeout);
 
         /* XXX These can be moved down when dynamic vars live is a struct */
         if (status == 0) {
-            log_message(ENCRYPT_LOG_ERR,
+            ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, r,
                 "FastCGIENC: failed to connect to server \"%s\": "
                 "connect() timed out (appConnTimeout=%dsec)", 
                 fr->fs_path, dynamicAppConnectTimeout);
-            return FCGI_FAILED;
+            return FCGIENC_FAILED;
         }
     }  /* dynamic */
     else {
@@ -1622,16 +1569,14 @@ static int open_connection_to_fs(fcgi_request *fr)
         FD_SET(fr->fd, &write_fds);
         read_fds = write_fds;
 
-        do {
-        	status = ap_select(fr->fd + 1, &read_fds, &write_fds, NULL, &tval);
-        } while (status < 0 && errno == EINTR);
+        status = ap_select((fr->fd+1), &read_fds, &write_fds, NULL, &tval);
 
         if (status == 0) {
-            log_message(ENCRYPT_LOG_ERR,
+            ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, r,
                 "FastCGIENC: failed to connect to server \"%s\": "
                 "connect() timed out (appConnTimeout=%dsec)", 
                 fr->fs_path, dynamicAppConnectTimeout);
-            return FCGI_FAILED;
+            return FCGIENC_FAILED;
         }
     }  /* !dynamic */
 
@@ -1639,10 +1584,10 @@ static int open_connection_to_fs(fcgi_request *fr)
 #ifdef WIN32
         errno = WSAGetLastError(); 
 #endif
-        log_message(ENCRYPT_LOG_ERR,
+        ap_log_rerror(FCGIENC_LOG_ERR_ERRNO, r,
             "FastCGIENC: failed to connect to server \"%s\": "
             "select() failed", fr->fs_path);
-        return FCGI_FAILED;
+        return FCGIENC_FAILED;
     }
 
     if (FD_ISSET(fr->fd, &write_fds) || FD_ISSET(fr->fd, &read_fds)) {
@@ -1654,29 +1599,29 @@ static int open_connection_to_fs(fcgi_request *fr)
 #ifdef WIN32
             errno = WSAGetLastError(); 
 #endif
-            log_message(ENCRYPT_LOG_ERR,
+            ap_log_rerror(FCGIENC_LOG_ERR_ERRNO, r,
                 "FastCGIENC: failed to connect to server \"%s\": "
                 "select() failed (Solaris pending error)", fr->fs_path);
-            return FCGI_FAILED;
+            return FCGIENC_FAILED;
         }
 
         if (error != 0) {
             /* Berkeley-derived pending error */
             errno = error;
-            log_message(ENCRYPT_LOG_ERR,
+            ap_log_rerror(FCGIENC_LOG_ERR_ERRNO, r,
                 "FastCGIENC: failed to connect to server \"%s\": "
                 "select() failed (pending error)", fr->fs_path);
-            return FCGI_FAILED;
+            return FCGIENC_FAILED;
         }
     } 
     else {
 #ifdef WIN32
         errno = WSAGetLastError();
 #endif
-        log_message(ENCRYPT_LOG_ERR,
+        ap_log_rerror(FCGIENC_LOG_ERR_ERRNO, r,
             "FastCGIENC: failed to connect to server \"%s\": "
             "select() error - THIS CAN'T HAPPEN!", fr->fs_path);
-        return FCGI_FAILED;
+        return FCGIENC_FAILED;
     }
 
 ConnectionComplete:
@@ -1694,22 +1639,22 @@ ConnectionComplete:
     }
 #endif
 
-    return FCGI_OK;
+    return FCGIENC_OK;
 }
 
-static void sink_client_data(fcgi_request *fr)
+static void sink_client_data(fcgienc_request *fr)
 {
     char *base;
     int size;
 
-    fcgi_buf_reset(fr->clientInputBuffer);
-    fcgi_buf_get_free_block_info(fr->clientInputBuffer, &base, &size);
+    fcgienc_buf_reset(fr->clientInputBuffer);
+    fcgienc_buf_get_free_block_info(fr->clientInputBuffer, &base, &size);
 	while (ap_get_client_block(fr->r, base, size) > 0);
 }
 
 static apcb_t cleanup(void *data)
 {
-    fcgi_request * const fr = (fcgi_request *) data;
+    fcgienc_request * const fr = (fcgienc_request *) data;
 
     if (fr == NULL) return APCB_OK;
 
@@ -1719,7 +1664,7 @@ static apcb_t cleanup(void *data)
     send_request_complete(fr);
 
     if (fr->fs_stderr_len) {
-        log_message(ENCRYPT_LOG_ERR,
+        ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, fr->r,
             "FastCGIENC: server \"%s\" stderr: %s", fr->fs_path, fr->fs_stderr);
     }
 
@@ -1727,7 +1672,7 @@ static apcb_t cleanup(void *data)
 }
 
 #ifdef WIN32
-static int npipe_io(fcgi_request * const fr)
+static int npipe_io(fcgienc_request * const fr)
 {
     request_rec * const r = fr->r;
     enum 
@@ -1757,12 +1702,11 @@ static int npipe_io(fcgi_request * const fr)
     pool * const rp = r->pool;
     int is_connected = 0;
     DWORD recv_count = 0;
-    int expect_cont = 0;
 
     dynamic_last_io_time.tv_sec = 0;
     dynamic_last_io_time.tv_usec = 0;
     
-    if (fr->role == FCGI_RESPONDER)
+    if (fr->role == FCGIENC_RESPONDER)
     {
         client_recv = (fr->expectingClientContent != 0);
     }
@@ -1798,7 +1742,7 @@ static int npipe_io(fcgi_request * const fr)
         {
         case STATE_ENV_SEND:
 
-            if (fcgi_protocol_queue_env(r, fr, &env_status, &expect_cont) == 0)
+            if (fcgienc_protocol_queue_env(r, fr, &env_status) == 0)
             {
                 goto SERVER_SEND;
             }
@@ -1828,7 +1772,7 @@ SERVER_SEND:
 
             if (! is_connected) 
             {
-                if (open_connection_to_fs(fr) != FCGI_OK) 
+                if (open_connection_to_fs(fr) != FCGIENC_OK) 
                 {
                     ap_kill_timeout(r);
                     return HTTP_INTERNAL_SERVER_ERROR;
@@ -1847,7 +1791,7 @@ SERVER_SEND:
                 if (WriteFile((HANDLE) fr->fd, b->begin, len, &sent, &sov))
                 {
                     /* sov.hEvent is set */
-                    fcgi_buf_removed(b, sent);
+                    fcgienc_buf_removed(b, sent);
                 }
                 else if (GetLastError() == ERROR_IO_PENDING)
                 {
@@ -1855,7 +1799,7 @@ SERVER_SEND:
                 }
                 else
                 {
-                    log_message(ENCRYPT_LOG_ERR, "FastCGIENC: comm with server "
+                    ap_log_rerror(FCGIENC_LOG_ERR, r, "FastCGIENC: comm with server "
                         "\"%s\" aborted: WriteFile() failed", fr->fs_path);
                     state = STATE_ERROR;
                     break;
@@ -1881,7 +1825,7 @@ SERVER_SEND:
 
                 if (ReadFile((HANDLE) fr->fd, b->end, len, &rcvd, &rov))
                 {
-                    fcgi_buf_added(b, rcvd);
+                    fcgienc_buf_added(b, rcvd);
                     recv_count += rcvd;
                     ResetEvent(rov.hEvent);
                     if (dynamic_first_recv)
@@ -1906,7 +1850,7 @@ SERVER_SEND:
                 }
                 else
                 {
-                    log_message(ENCRYPT_LOG_ERR, "FastCGIENC: comm with server "
+                    ap_log_rerror(FCGIENC_LOG_ERR, r, "FastCGIENC: comm with server "
                         "\"%s\" aborted: ReadFile() failed", fr->fs_path);
                     state = STATE_ERROR;
                     break;
@@ -1926,12 +1870,6 @@ SERVER_SEND:
                 }
 
                 client_send = 0;
-
-                if (fcgi_protocol_dequeue(rp, fr))
-                {
-                    state = STATE_ERROR;
-                    break;
-                }
             }
 
             break;
@@ -1959,7 +1897,7 @@ SERVER_SEND:
             int delay;
             struct timeval qwait;
 
-            fcgi_util_ticks(&fr->queueTime);
+            fcgienc_util_ticks(&fr->queueTime);
 
             if (did_io) 
             {
@@ -1975,8 +1913,8 @@ SERVER_SEND:
         
                 if (idle_time.tv_sec > idle_timeout) 
                 {
-                    send_to_pm(FCGI_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
-                    log_message(ENCRYPT_LOG_ERR, "FastCGIENC: comm "
+                    send_to_pm(FCGIENC_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
+                    ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, r, "FastCGIENC: comm "
                         "with (dynamic) server \"%s\" aborted: (first read) "
                         "idle timeout (%d sec)", fr->fs_path, idle_timeout);
                     state = STATE_ERROR;
@@ -1997,7 +1935,7 @@ SERVER_SEND:
             else 
             {
                 /* Killed time somewhere.. client read? */
-                send_to_pm(FCGI_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
+                send_to_pm(FCGIENC_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
                 dynamic_first_recv = qwait.tv_sec / dynamicPleaseStartDelay + 1;
                 timeout.tv_sec = dynamic_first_recv * dynamicPleaseStartDelay;
                 timeout.tv_usec = 100000;  /* fudge for select() slop */
@@ -2029,16 +1967,16 @@ SERVER_SEND:
                 {
                     struct timeval qwait;
 
-                    fcgi_util_ticks(&fr->queueTime);
+                    fcgienc_util_ticks(&fr->queueTime);
                     timersub(&fr->queueTime, &fr->startTime, &qwait);
 
-                    send_to_pm(FCGI_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
+                    send_to_pm(FCGIENC_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
 
                     dynamic_first_recv = qwait.tv_sec / dynamicPleaseStartDelay + 1;
                 }
                 else
                 {
-                    log_message(ENCRYPT_LOG_ERR, "FastCGIENC: comm with "
+                    ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, r, "FastCGIENC: comm with "
                         "server \"%s\" aborted: idle timeout (%d sec)",
                         fr->fs_path, idle_timeout);
                     state = STATE_ERROR;
@@ -2060,11 +1998,11 @@ SERVER_SEND:
                         if (GetOverlappedResult((HANDLE) fr->fd, &sov, &sent, FALSE))
                         {
                             send_pending = 0;
-                            fcgi_buf_removed(fr->serverOutputBuffer, sent);
+                            fcgienc_buf_removed(fr->serverOutputBuffer, sent);
                         }
                         else
                         {
-                            log_message(ENCRYPT_LOG_ERR, "FastCGIENC: comm with server "
+                            ap_log_rerror(FCGIENC_LOG_ERR, r, "FastCGIENC: comm with server "
                                 "\"%s\" aborted: GetOverlappedResult() failed", fr->fs_path);
                             state = STATE_ERROR;
                             break;
@@ -2084,7 +2022,7 @@ SERVER_SEND:
 
                     if (GetOverlappedResult((HANDLE) fr->fd, &rov, &rcvd, FALSE))
                     {
-                        fcgi_buf_added(fr->serverInputBuffer, rcvd);
+                        fcgienc_buf_added(fr->serverInputBuffer, rcvd);
                         if (dynamic_first_recv)
                         {
                             dynamic_first_recv = 0;
@@ -2092,7 +2030,7 @@ SERVER_SEND:
                     }
                     else
                     {
-                        log_message(ENCRYPT_LOG_ERR, "FastCGIENC: comm with server "
+                        ap_log_rerror(FCGIENC_LOG_ERR, r, "FastCGIENC: comm with server "
                             "\"%s\" aborted: GetOverlappedResult() failed", fr->fs_path);
                         state = STATE_ERROR;
                         break;
@@ -2101,7 +2039,7 @@ SERVER_SEND:
             }
         }
 
-        if (fcgi_protocol_dequeue(rp, fr)) 
+        if (fcgienc_protocol_dequeue(rp, fr)) 
         {
             state = STATE_ERROR;
             break;
@@ -2112,7 +2050,7 @@ SERVER_SEND:
             const char * err = process_headers(r, fr);
             if (err)
             {
-                log_message(ENCRYPT_LOG_ERR,
+                ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, r,
                     "FastCGIENC: comm with server \"%s\" aborted: "
                     "error parsing headers: %s", fr->fs_path, err);
                 state = STATE_ERROR;
@@ -2140,7 +2078,7 @@ SERVER_SEND:
 }
 #endif /* WIN32 */
 
-static int socket_io(fcgi_request * const fr)
+static int socket_io(fcgienc_request * const fr)
 {
     enum 
     {
@@ -2171,13 +2109,11 @@ static int socket_io(fcgi_request * const fr)
     env_status env;
     pool *rp = r->pool;
     int is_connected = 0;
-    int expect_cont = 0;
-    int client_error = 0;
     
     dynamic_last_io_time.tv_sec = 0;
     dynamic_last_io_time.tv_usec = 0;
     
-    if (fr->role == FCGI_RESPONDER) 
+    if (fr->role == FCGIENC_RESPONDER) 
     {
         client_recv = (fr->expectingClientContent != 0);
     }
@@ -2209,7 +2145,7 @@ static int socket_io(fcgi_request * const fr)
         {
         case STATE_ENV_SEND:
 
-            if (fcgi_protocol_queue_env(r, fr, &env, &expect_cont) == 0)
+            if (fcgienc_protocol_queue_env(r, fr, &env) == 0)
             {
                 goto SERVER_SEND;
             }
@@ -2219,22 +2155,13 @@ static int socket_io(fcgi_request * const fr)
             /* fall through */
 
         case STATE_CLIENT_RECV:
-	    if (expect_cont && !fr->gotCont) {
-		goto SERVER_SEND;
-	    }
 
             if (read_from_client_n_queue(fr))
             {
-                client_error = 1;
-                if (fr->gotCont)
-                {
-                    shutdown_connection_to_fs(fr);
-                    fr->eofSent = 1;
-                } else {
-                  state = STATE_CLIENT_ERROR;
-                  break;
-                }
+                state = STATE_CLIENT_ERROR;
+                break;
             }
+
             if (fr->eofSent)
             {
                 state = STATE_SERVER_SEND;
@@ -2248,7 +2175,7 @@ SERVER_SEND:
 
             if (! is_connected) 
             {
-                if (open_connection_to_fs(fr) != FCGI_OK) 
+                if (open_connection_to_fs(fr) != FCGIENC_OK) 
                 {
                     ap_kill_timeout(r);
                     return HTTP_INTERNAL_SERVER_ERROR;
@@ -2288,12 +2215,6 @@ SERVER_SEND:
                 }
 
                 client_send = 0;
-
-                if (fcgi_protocol_dequeue(rp, fr))
-                {
-                    state = STATE_ERROR;
-                    break;
-                }
             }
 
             break;
@@ -2326,7 +2247,7 @@ SERVER_SEND:
             int delay;
             struct timeval qwait;
 
-            fcgi_util_ticks(&fr->queueTime);
+            fcgienc_util_ticks(&fr->queueTime);
 
             if (select_status) 
             {
@@ -2342,8 +2263,8 @@ SERVER_SEND:
         
                 if (idle_time.tv_sec > idle_timeout) 
                 {
-                    send_to_pm(FCGI_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
-                    log_message(ENCRYPT_LOG_ERR, "FastCGIENC: comm "
+                    send_to_pm(FCGIENC_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
+                    ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, r, "FastCGIENC: comm "
                         "with (dynamic) server \"%s\" aborted: (first read) "
                         "idle timeout (%d sec)", fr->fs_path, idle_timeout);
                     state = STATE_ERROR;
@@ -2366,7 +2287,7 @@ SERVER_SEND:
             else 
             {
                 /* Killed time somewhere.. client read? */
-                send_to_pm(FCGI_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
+                send_to_pm(FCGIENC_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
                 dynamic_first_recv = qwait.tv_sec / dynamicPleaseStartDelay + 1;
                 timeout.tv_sec = dynamic_first_recv * dynamicPleaseStartDelay;
                 timeout.tv_usec = 100000;  /* fudge for select() slop */
@@ -2378,15 +2299,13 @@ SERVER_SEND:
             timeout.tv_sec = idle_timeout;
             timeout.tv_usec = 0;
         }
-        
+
         /* wait on the socket */
-        do {
-            select_status = ap_select(nfds, &read_set, &write_set, NULL, &timeout);
-        } while (select_status < 0 && errno == EINTR);
+        select_status = ap_select(nfds, &read_set, &write_set, NULL, &timeout);
 
         if (select_status < 0)
         {
-            log_message(ENCRYPT_LOG_ERR, "FastCGIENC: comm with server "
+            ap_log_rerror(FCGIENC_LOG_ERR_ERRNO, r, "FastCGIENC: comm with server "
                 "\"%s\" aborted: select() failed", fr->fs_path);
             state = STATE_ERROR;
             break;
@@ -2398,7 +2317,7 @@ SERVER_SEND:
 
             if (BufferLength(fr->clientOutputBuffer)) 
             {
-                if (fr->role == FCGI_RESPONDER)
+                if (fr->role == FCGIENC_RESPONDER)
                 {
                     client_send = TRUE;
                 }
@@ -2407,32 +2326,32 @@ SERVER_SEND:
             {
                 struct timeval qwait;
 
-                fcgi_util_ticks(&fr->queueTime);
+                fcgienc_util_ticks(&fr->queueTime);
                 timersub(&fr->queueTime, &fr->startTime, &qwait);
 
-                send_to_pm(FCGI_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
+                send_to_pm(FCGIENC_REQUEST_TIMEOUT_JOB, fr->fs_path, fr->user, fr->group, 0, 0);
 
                 dynamic_first_recv = qwait.tv_sec / dynamicPleaseStartDelay + 1;
                 continue;
             }
             else 
             {
-                log_message(ENCRYPT_LOG_ERR, "FastCGIENC: comm with "
+                ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, r, "FastCGIENC: comm with "
                     "server \"%s\" aborted: idle timeout (%d sec)",
                     fr->fs_path, idle_timeout);
                 state = STATE_ERROR;
             }
         }
 
-        if (FD_ISSET(fr->fd, &write_set) && !client_error)
+        if (FD_ISSET(fr->fd, &write_set))
         {
             /* send to the server */
 
-            rv = fcgi_buf_socket_send(fr->serverOutputBuffer, fr->fd);
+            rv = fcgienc_buf_socket_send(fr->serverOutputBuffer, fr->fd);
 
             if (rv < 0)
             {
-                log_message(ENCRYPT_LOG_ERR, "FastCGIENC: comm with server "
+                ap_log_rerror(FCGIENC_LOG_ERR, r, "FastCGIENC: comm with server "
                     "\"%s\" aborted: write failed", fr->fs_path);
                 state = STATE_ERROR;
                 break;
@@ -2446,36 +2365,20 @@ SERVER_SEND:
             if (dynamic_first_recv) 
             {
                 dynamic_first_recv = 0;
-                fcgi_util_ticks(&fr->queueTime);
+                fcgienc_util_ticks(&fr->queueTime);
             }
 
-            rv = fcgi_buf_socket_recv(fr->serverInputBuffer, fr->fd);
+            rv = fcgienc_buf_socket_recv(fr->serverInputBuffer, fr->fd);
 
             if (rv < 0) 
             {
-            	if (errno == EAGAIN) 
-            	{
-                    /* this reportedly occurs on AIX 5.2 sporadically */
-                    struct timeval tv;
-                    tv.tv_sec = 1;
-                    tv.tv_usec = 0;
-
-            		log_message(ENCRYPT_LOG_INFO, "FastCGIENC: comm with server "
-            				"\"%s\" interrupted: read will be retried in 1 second", 
-            				fr->fs_path);
-            		
-                    /* avoid sleep/alarm interactions */
-                    ap_select(0, NULL, NULL, NULL, &tv);
-            	}
-            	else 
-            	{
-            		log_message(ENCRYPT_LOG_ERR, "FastCGIENC: comm with server "
-            				"\"%s\" aborted: read failed", fr->fs_path);
-            		state = STATE_ERROR;
-            		break;
-            	}
+                ap_log_rerror(FCGIENC_LOG_ERR, r, "FastCGIENC: comm with server "
+                    "\"%s\" aborted: read failed", fr->fs_path);
+                state = STATE_ERROR;
+                break;
             }
-            else if (rv == 0) 
+
+            if (rv == 0) 
             {
                 fr->keepReadingFromFcgiApp = FALSE;
                 state = STATE_CLIENT_SEND;
@@ -2483,7 +2386,7 @@ SERVER_SEND:
             }
         }
 
-        if (fcgi_protocol_dequeue(rp, fr)) 
+        if (fcgienc_protocol_dequeue(rp, fr)) 
         {
             state = STATE_ERROR;
             break;
@@ -2494,16 +2397,12 @@ SERVER_SEND:
             const char * err = process_headers(r, fr);
             if (err)
             {
-                log_message(ENCRYPT_LOG_ERR,
+                ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, r,
                     "FastCGIENC: comm with server \"%s\" aborted: "
                     "error parsing headers: %s", fr->fs_path, err);
                 state = STATE_ERROR;
                 break;
             }
-	    if (expect_cont && fr->gotCont) {
-		state = STATE_CLIENT_RECV;
-		continue;
-	    }
         }
 
         if (fr->exitStatusSet) 
@@ -2512,12 +2411,6 @@ SERVER_SEND:
             state = STATE_CLIENT_SEND;
             break;
         }
-    }
-
-    /* was a client side error, don't blame the server */
-    if (client_error)
-    {
-        fr->parseHeader = SCAN_CGI_FINISHED;
     }
     
     return (state == STATE_ERROR);
@@ -2528,16 +2421,16 @@ SERVER_SEND:
  * This is the core routine for moving data between the FastCGIENC
  * application and the Web server's client.
  */
-static int do_work(request_rec * const r, fcgi_request * const fr)
+static int do_work(request_rec * const r, fcgienc_request * const fr)
 {
     int rv;
     pool *rp = r->pool;
 
-	fcgi_protocol_queue_begin_request(fr);
+    fcgienc_protocol_queue_begin_request(fr);
 
-    if (fr->role == FCGI_RESPONDER) 
+    if (fr->role == FCGIENC_RESPONDER) 
     {
-        rv = ap_setup_client_block(r, REQUEST_CHUNKED_DECHUNK);
+        rv = ap_setup_client_block(r, REQUEST_CHUNKED_ERROR);
         if (rv != OK) 
         {
             ap_kill_timeout(r);
@@ -2565,14 +2458,14 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
     /* comm with the server is done */
     close_connection_to_fs(fr);
 
-    if (fr->role == FCGI_RESPONDER) 
+    if (fr->role == FCGIENC_RESPONDER) 
     {
         sink_client_data(fr);
     }
 
     while (rv == 0 && (BufferLength(fr->serverInputBuffer) || BufferLength(fr->clientOutputBuffer)))
     {
-        if (fcgi_protocol_dequeue(rp, fr)) 
+        if (fcgienc_protocol_dequeue(rp, fr)) 
         {
             rv = HTTP_INTERNAL_SERVER_ERROR;
         }
@@ -2582,14 +2475,14 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
             const char * err = process_headers(r, fr);
             if (err)
             {
-                log_message(ENCRYPT_LOG_ERR,
+                ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, r,
                     "FastCGIENC: comm with server \"%s\" aborted: "
                     "error parsing headers: %s", fr->fs_path, err);
                 rv = HTTP_INTERNAL_SERVER_ERROR;
             }
         }
 
-        if (fr->role == FCGI_RESPONDER) 
+        if (fr->role == FCGIENC_RESPONDER) 
         {
             if (write_to_client(fr)) 
             {
@@ -2598,7 +2491,7 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
         }
         else
         {
-            fcgi_buf_reset(fr->clientOutputBuffer);
+            fcgienc_buf_reset(fr->clientOutputBuffer);
         }
     }
 
@@ -2606,7 +2499,7 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
     {
     case SCAN_CGI_FINISHED:
 
-        if (fr->role == FCGI_RESPONDER) 
+        if (fr->role == FCGIENC_RESPONDER) 
         {
             /* RUSSIAN_APACHE requires rflush() over bflush() */
             ap_rflush(r);
@@ -2624,7 +2517,7 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
 
     case SCAN_CGI_READING_HEADERS:
 
-        log_message(ENCRYPT_LOG_ERR, "FastCGIENC: incomplete headers "
+        ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, r, "FastCGIENC: incomplete headers "
             "(%d bytes) received from server \"%s\"", fr->header->nelts, fr->fs_path);
         
         /* fall through */
@@ -2645,14 +2538,14 @@ static int do_work(request_rec * const r, fcgi_request * const fr)
 }
 
 static int 
-create_fcgi_request(request_rec * const r, 
+create_fcgienc_request(request_rec * const r, 
                     const char * const path, 
-                    fcgi_request ** const frP)
+                    fcgienc_request ** const frP)
 {
     const char *fs_path;
     pool * const p = r->pool;
-    fcgi_server *fs;
-    fcgi_request * const fr = (fcgi_request *)ap_pcalloc(p, sizeof(fcgi_request));
+    fcgienc_server *fs;
+    fcgienc_request * const fr = (fcgienc_request *)ap_pcalloc(p, sizeof(fcgienc_request));
     uid_t uid;
     gid_t gid;
 
@@ -2660,7 +2553,7 @@ create_fcgi_request(request_rec * const r,
 
     get_request_identity(r, &uid, &gid);
 
-    fs = fcgi_util_fs_get_by_id(fs_path, uid, gid);
+    fs = fcgienc_util_fs_get_by_id(fs_path, uid, gid);
 
     if (fs == NULL) 
     {
@@ -2684,16 +2577,16 @@ create_fcgi_request(request_rec * const r,
             
             if (stat(fs_path, my_finfo) < 0) 
             {
-                log_message(ENCRYPT_LOG_ERR, 
+                ap_log_rerror(FCGIENC_LOG_ERR_ERRNO, r, 
                     "FastCGIENC: stat() of \"%s\" failed", fs_path);
                 return HTTP_NOT_FOUND;
             }
         }
 
-        err = fcgi_util_fs_is_path_ok(p, fs_path, my_finfo);
+        err = fcgienc_util_fs_is_path_ok(p, fs_path, my_finfo);
         if (err) 
         {
-            log_message(ENCRYPT_LOG_ERR, 
+            ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, r, 
                 "FastCGIENC: invalid (dynamic) server \"%s\": %s", fs_path, err);
             return HTTP_FORBIDDEN;
         }
@@ -2702,11 +2595,11 @@ create_fcgi_request(request_rec * const r,
     fr->nph = (strncmp(strrchr(fs_path, '/'), "/nph-", 5) == 0)
 		|| (fs && fs->nph);
 
-    fr->serverInputBuffer = fcgi_buf_new(p, SERVER_BUFSIZE);
-    fr->serverOutputBuffer = fcgi_buf_new(p, SERVER_BUFSIZE);
-    fr->clientInputBuffer = fcgi_buf_new(p, SERVER_BUFSIZE);
-    fr->clientOutputBuffer = fcgi_buf_new(p, SERVER_BUFSIZE);
-    fr->erBufPtr = fcgi_buf_new(p, sizeof(FCGI_EndRequestBody) + 1);
+    fr->serverInputBuffer = fcgienc_buf_new(p, SERVER_BUFSIZE);
+    fr->serverOutputBuffer = fcgienc_buf_new(p, SERVER_BUFSIZE);
+    fr->clientInputBuffer = fcgienc_buf_new(p, SERVER_BUFSIZE);
+    fr->clientOutputBuffer = fcgienc_buf_new(p, SERVER_BUFSIZE);
+    fr->erBufPtr = fcgienc_buf_new(p, sizeof(FCGIENC_EndRequestBody) + 1);
     fr->gotHeader = FALSE;
     fr->parseHeader = SCAN_CGI_READING_HEADERS;
     fr->header = ap_make_array(p, 1, 1);
@@ -2717,7 +2610,7 @@ create_fcgi_request(request_rec * const r,
     fr->exitStatusSet = FALSE;
     fr->requestId = 1; /* anything but zero is OK here */
     fr->eofSent = FALSE;
-    fr->role = FCGI_RESPONDER;
+    fr->role = FCGIENC_RESPONDER;
     fr->expectingClientContent = FALSE;
     fr->keepReadingFromFcgiApp = TRUE;
     fr->fs = fs;
@@ -2747,7 +2640,7 @@ create_fcgi_request(request_rec * const r,
 		}
 		r->output_filters = r->proto_output_filters = cur;
 #else
-	    log_message(ENCRYPT_LOG_ERR, 
+	    ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, r, 
 	        "FastCGIENC: invalid request \"%s\": non parsed header support is "
 	    		"not available in Apache13 (patch welcome)", fs_path);
 	    return HTTP_FORBIDDEN;
@@ -2795,9 +2688,9 @@ static int apache_is_scriptaliased(request_rec *r)
  * Apache redirects say "Status: 200".  See process_headers().
  */
 static int post_process_for_redirects(request_rec * const r,
-    const fcgi_request * const fr)
+    const fcgienc_request * const fr)
 {
-	switch(fr->parseHeader) {
+    switch(fr->parseHeader) {
         case SCAN_CGI_INT_REDIRECT:
 
             /* @@@ There are still differences between the handling in
@@ -2818,16 +2711,7 @@ static int post_process_for_redirects(request_rec * const r,
             return HTTP_MOVED_TEMPORARILY;
 
         default:
-#ifdef APACHE2        	
-	        {
-	        	apr_bucket_brigade *brigade = apr_brigade_create(r->pool, r->connection->bucket_alloc);
-	        	apr_bucket* bucket = apr_bucket_eos_create(r->connection->bucket_alloc);
-	        	APR_BRIGADE_INSERT_HEAD(brigade, bucket);
-	        	return ap_pass_brigade(r->output_filters, brigade); 
-	        }
-#else 
-	        return OK;
-#endif
+            return OK;
     }
 }
 
@@ -2836,11 +2720,11 @@ static int post_process_for_redirects(request_rec * const r,
  */
 static int content_handler(request_rec *r)
 {
-    fcgi_request *fr = NULL;
+    fcgienc_request *fr = NULL;
     int ret;
 
 #ifdef APACHE2
-    if (strcmp(r->handler, FASTCGIENC_HANDLER_NAME))
+    if (strcmp(r->handler, ENCRYPT_HANDLER_NAME))
         return DECLINED;
 #endif
 
@@ -2849,23 +2733,30 @@ static int content_handler(request_rec *r)
 		log_message(ENCRYPT_LOG_INFO, "Session Starting : %s", r->the_request);
 
     /* Setup a new FastCGIENC request */
-    ret = create_fcgi_request(r, NULL, &fr);
+    ret = create_fcgienc_request(r, NULL, &fr);
     if (ret)
-        goto HANDLER_EXIT;
+		goto HANDLER_EXIT;
 
     /* If its a dynamic invocation, make sure scripts are OK here */
     if (fr->dynamic && ! (ap_allow_options(r) & OPT_EXECCGI) 
         && ! apache_is_scriptaliased(r)) 
     {
-        log_message(ENCRYPT_LOG_ERR,
+        ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, r,
             "FastCGIENC: \"ExecCGI Option\" is off in this directory: %s", r->uri);
-        ret = HTTP_FORBIDDEN;
+		ret = HTTP_FORBIDDEN;
 		goto HANDLER_EXIT;
     }
 
-	if (fcgi_encrypt_flag == TRUE)
-		InitEncrypt(&fr->encryptor);
-	
+	if (fcgienc_encrypt_flag == TRUE)
+	{
+		if (InitEncrypt(&fr->encryptor) != 0)
+		{
+			log_message(ENCRYPT_LOG_INFO, "Failed to init encrypt module");
+			ret = HTTP_UNAUTHORIZED;
+			goto HANDLER_EXIT;
+		}
+	}
+
     /* Process the encrypt-script request */
     if ((ret = do_work(r, fr)) != OK)
         goto HANDLER_EXIT;
@@ -2874,10 +2765,10 @@ static int content_handler(request_rec *r)
     ret = post_process_for_redirects(r, fr);
 
 HANDLER_EXIT:
-	if (fcgi_encrypt_flag == TRUE)
+	if (fcgienc_encrypt_flag == TRUE)
 		CloseCrypt(&fr->encryptor);
 
-	if (fcgi_decrypt_flag == TRUE)
+	if (fcgienc_decrypt_flag == TRUE)
 		CloseCrypt(&fr->decryptor);
 
 	if (r->the_request)
@@ -2912,7 +2803,7 @@ static int post_process_auth_failed_header(table * const t, const char * const k
     return 1;
 }
 
-static void post_process_auth(fcgi_request * const fr, const int passed)
+static void post_process_auth(fcgienc_request * const fr, const int passed)
 {
     request_rec * const r = fr->r;
 
@@ -2943,9 +2834,9 @@ static int check_user_authentication(request_rec *r)
 {
     int res, authenticated = 0;
     const char *password;
-    fcgi_request *fr;
-    const fcgi_dir_config * const dir_config =
-        (const fcgi_dir_config *)ap_get_module_config(r->per_dir_config, &encrypt_module);
+    fcgienc_request *fr;
+    const fcgienc_dir_config * const dir_config =
+        (const fcgienc_dir_config *)ap_get_module_config(r->per_dir_config, &encrypt_module);
 
     if (dir_config->authenticator == NULL)
         return DECLINED;
@@ -2954,7 +2845,7 @@ static int check_user_authentication(request_rec *r)
     if ((res = ap_get_basic_auth_pw(r, &password)) != OK)
         return res;
 
-    res = create_fcgi_request(r, dir_config->authenticator, &fr);
+    res = create_fcgienc_request(r, dir_config->authenticator, &fr);
     if (res)
     {
         return res;
@@ -2964,13 +2855,13 @@ static int check_user_authentication(request_rec *r)
     fr->saved_subprocess_env = ap_copy_table(r->pool, r->subprocess_env);
 
     ap_table_setn(r->subprocess_env, "REMOTE_PASSWD", password);
-    ap_table_setn(r->subprocess_env, "FCGI_APACHE_ROLE", "AUTHENTICATOR");
+    ap_table_setn(r->subprocess_env, "FCGIENC_APACHE_ROLE", "AUTHENTICATOR");
 
     /* The FastCGIENC Protocol doesn't differentiate authentication */
-    fr->role = FCGI_AUTHORIZER;
+    fr->role = FCGIENC_AUTHORIZER;
 
     /* Do we need compatibility mode? */
-    fr->auth_compat = (dir_config->authenticator_options & FCGI_COMPAT);
+    fr->auth_compat = (dir_config->authenticator_options & FCGIENC_COMPAT);
 
     if ((res = do_work(r, fr)) != OK)
         goto AuthenticationFailed;
@@ -2980,7 +2871,7 @@ static int check_user_authentication(request_rec *r)
 
     /* A redirect shouldn't be allowed during the authentication phase */
     if (ap_table_get(r->headers_out, "Location") != NULL) {
-        log_message(ENCRYPT_LOG_ERR,
+        ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, r,
             "FastCGIENC: FastCgiEncAuthenticator \"%s\" redirected (not allowed)",
             dir_config->authenticator);
         goto AuthenticationFailed;
@@ -2990,12 +2881,12 @@ static int check_user_authentication(request_rec *r)
         return OK;
 
 AuthenticationFailed:
-    if (!(dir_config->authenticator_options & FCGI_AUTHORITATIVE))
+    if (!(dir_config->authenticator_options & FCGIENC_AUTHORITATIVE))
         return DECLINED;
 
     /* @@@ Probably should support custom_responses */
     ap_note_basic_auth_failure(r);
-    log_message(ENCRYPT_LOG_ERR,
+    ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, r,
         "FastCGIENC: authentication failed for user \"%s\": %s",
 #ifdef APACHE2
         r->user, r->uri);
@@ -3009,9 +2900,9 @@ AuthenticationFailed:
 static int check_user_authorization(request_rec *r)
 {
     int res, authorized = 0;
-    fcgi_request *fr;
-    const fcgi_dir_config * const dir_config =
-        (const fcgi_dir_config *)ap_get_module_config(r->per_dir_config, &encrypt_module);
+    fcgienc_request *fr;
+    const fcgienc_dir_config * const dir_config =
+        (const fcgienc_dir_config *)ap_get_module_config(r->per_dir_config, &encrypt_module);
 
     if (dir_config->authorizer == NULL)
         return DECLINED;
@@ -3021,7 +2912,7 @@ static int check_user_authorization(request_rec *r)
      * FastCGIENC server and pass the rest of the directive line), but for now keep
      * it simple. */
 
-    res = create_fcgi_request(r, dir_config->authorizer, &fr);
+    res = create_fcgienc_request(r, dir_config->authorizer, &fr);
     if (res)
     {
         return res;
@@ -3030,12 +2921,12 @@ static int check_user_authorization(request_rec *r)
     /* Save the existing subprocess_env, because we're gonna muddy it up */
     fr->saved_subprocess_env = ap_copy_table(r->pool, r->subprocess_env);
 
-    ap_table_setn(r->subprocess_env, "FCGI_APACHE_ROLE", "AUTHORIZER");
+    ap_table_setn(r->subprocess_env, "FCGIENC_APACHE_ROLE", "AUTHORIZER");
 
-    fr->role = FCGI_AUTHORIZER;
+    fr->role = FCGIENC_AUTHORIZER;
 
     /* Do we need compatibility mode? */
-    fr->auth_compat = (dir_config->authorizer_options & FCGI_COMPAT);
+    fr->auth_compat = (dir_config->authorizer_options & FCGIENC_COMPAT);
 
     if ((res = do_work(r, fr)) != OK)
         goto AuthorizationFailed;
@@ -3045,7 +2936,7 @@ static int check_user_authorization(request_rec *r)
 
     /* A redirect shouldn't be allowed during the authorization phase */
     if (ap_table_get(r->headers_out, "Location") != NULL) {
-        log_message(ENCRYPT_LOG_ERR,
+        ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, r,
             "FastCGIENC: FastCgiEncAuthorizer \"%s\" redirected (not allowed)",
             dir_config->authorizer);
         goto AuthorizationFailed;
@@ -3055,12 +2946,12 @@ static int check_user_authorization(request_rec *r)
         return OK;
 
 AuthorizationFailed:
-    if (!(dir_config->authorizer_options & FCGI_AUTHORITATIVE))
+    if (!(dir_config->authorizer_options & FCGIENC_AUTHORITATIVE))
         return DECLINED;
 
     /* @@@ Probably should support custom_responses */
     ap_note_basic_auth_failure(r);
-    log_message(ENCRYPT_LOG_ERR,
+    ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, r,
         "FastCGIENC: authorization failed for user \"%s\": %s", 
 #ifdef APACHE2
         r->user, r->uri);
@@ -3074,14 +2965,14 @@ AuthorizationFailed:
 static int check_access(request_rec *r)
 {
     int res, access_allowed = 0;
-    fcgi_request *fr;
-    const fcgi_dir_config * const dir_config =
-        (fcgi_dir_config *)ap_get_module_config(r->per_dir_config, &encrypt_module);
+    fcgienc_request *fr;
+    const fcgienc_dir_config * const dir_config =
+        (fcgienc_dir_config *)ap_get_module_config(r->per_dir_config, &encrypt_module);
 
     if (dir_config == NULL || dir_config->access_checker == NULL)
         return DECLINED;
 
-    res = create_fcgi_request(r, dir_config->access_checker, &fr);
+    res = create_fcgienc_request(r, dir_config->access_checker, &fr);
     if (res)
     {
         return res;
@@ -3090,13 +2981,13 @@ static int check_access(request_rec *r)
     /* Save the existing subprocess_env, because we're gonna muddy it up */
     fr->saved_subprocess_env = ap_copy_table(r->pool, r->subprocess_env);
 
-    ap_table_setn(r->subprocess_env, "FCGI_APACHE_ROLE", "ACCESS_CHECKER");
+    ap_table_setn(r->subprocess_env, "FCGIENC_APACHE_ROLE", "ACCESS_CHECKER");
 
     /* The FastCGIENC Protocol doesn't differentiate access control */
-    fr->role = FCGI_AUTHORIZER;
+    fr->role = FCGIENC_AUTHORIZER;
 
     /* Do we need compatibility mode? */
-    fr->auth_compat = (dir_config->access_checker_options & FCGI_COMPAT);
+    fr->auth_compat = (dir_config->access_checker_options & FCGIENC_COMPAT);
 
     if ((res = do_work(r, fr)) != OK)
         goto AccessFailed;
@@ -3106,7 +2997,7 @@ static int check_access(request_rec *r)
 
     /* A redirect shouldn't be allowed during the access check phase */
     if (ap_table_get(r->headers_out, "Location") != NULL) {
-        log_message(ENCRYPT_LOG_ERR,
+        ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, r,
             "FastCGIENC: FastCgiEncAccessChecker \"%s\" redirected (not allowed)",
             dir_config->access_checker);
         goto AccessFailed;
@@ -3116,11 +3007,11 @@ static int check_access(request_rec *r)
         return OK;
 
 AccessFailed:
-    if (!(dir_config->access_checker_options & FCGI_AUTHORITATIVE))
+    if (!(dir_config->access_checker_options & FCGIENC_AUTHORITATIVE))
         return DECLINED;
 
     /* @@@ Probably should support custom_responses */
-    log_message(ENCRYPT_LOG_ERR, "FastCGIENC: access denied: %s", r->uri);
+    ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, r, "FastCGIENC: access denied: %s", r->uri);
     return (res == OK) ? HTTP_FORBIDDEN : res;
 }
 
@@ -3133,9 +3024,9 @@ fixups(request_rec * r)
 
         get_request_identity(r, &uid, &gid);
 
-	    if (fcgi_util_fs_get_by_id(r->filename, uid, gid))
+	    if (fcgienc_util_fs_get_by_id(r->filename, uid, gid))
 	    {
-	        r->handler = FASTCGIENC_HANDLER_NAME;
+	        r->handler = ENCRYPT_HANDLER_NAME;
 	        return OK;
 	    }
     }
@@ -3156,57 +3047,57 @@ fixups(request_rec * r)
 
 #endif
 
-static const command_rec fastcgi_cmds[] = 
+static const command_rec encrypt_cmds[] = 
 {
-    AP_INIT_RAW_ARGS("AppClass",      fcgi_config_new_static_server, NULL, RSRC_CONF, NULL),
-    AP_INIT_RAW_ARGS("FastCgiEncServer", fcgi_config_new_static_server, NULL, RSRC_CONF, NULL),
+    AP_INIT_RAW_ARGS("AppClass",      fcgienc_config_new_static_server, NULL, RSRC_CONF, NULL),
+    AP_INIT_RAW_ARGS("FastCgiEncServer", fcgienc_config_new_static_server, NULL, RSRC_CONF, NULL),
 
-    AP_INIT_RAW_ARGS("ExternalAppClass",      fcgi_config_new_external_server, NULL, RSRC_CONF, NULL),
-    AP_INIT_RAW_ARGS("FastCgiEncExternalServer", fcgi_config_new_external_server, NULL, RSRC_CONF, NULL),
+    AP_INIT_RAW_ARGS("ExternalAppClass",      fcgienc_config_new_external_server, NULL, RSRC_CONF, NULL),
+    AP_INIT_RAW_ARGS("FastCgiEncExternalServer", fcgienc_config_new_external_server, NULL, RSRC_CONF, NULL),
 
-    AP_INIT_TAKE1("FastCgiEncIpcDir", fcgi_config_set_socket_dir, NULL, RSRC_CONF, NULL),
+    AP_INIT_TAKE1("FastCgiEncIpcDir", fcgienc_config_set_socket_dir, NULL, RSRC_CONF, NULL),
 
-    AP_INIT_TAKE1("FastCgiEncSuexec",  fcgi_config_set_wrapper, NULL, RSRC_CONF, NULL),
-    AP_INIT_TAKE1("FastCgiEncWrapper", fcgi_config_set_wrapper, NULL, RSRC_CONF, NULL),
+    AP_INIT_TAKE1("FastCgiEncSuexec",  fcgienc_config_set_wrapper, NULL, RSRC_CONF, NULL),
+    AP_INIT_TAKE1("FastCgiEncWrapper", fcgienc_config_set_wrapper, NULL, RSRC_CONF, NULL),
 
-    AP_INIT_RAW_ARGS("FCGIConfig",    fcgi_config_set_config, NULL, RSRC_CONF, NULL),
-    AP_INIT_RAW_ARGS("FastCgiEncConfig", fcgi_config_set_config, NULL, RSRC_CONF, NULL),
+    AP_INIT_RAW_ARGS("FCGIConfig",    fcgienc_config_set_config, NULL, RSRC_CONF, NULL),
+    AP_INIT_RAW_ARGS("FastCgiEncConfig", fcgienc_config_set_config, NULL, RSRC_CONF, NULL),
 
-    AP_INIT_TAKE12("FastCgiEncAuthenticator", fcgi_config_new_auth_server,
-        (void *)FCGI_AUTH_TYPE_AUTHENTICATOR, ACCESS_CONF,
+    AP_INIT_TAKE12("FastCgiEncAuthenticator", fcgienc_config_new_auth_server,
+        (void *)FCGIENC_AUTH_TYPE_AUTHENTICATOR, ACCESS_CONF,
         "a encrypt-script path (absolute or relative to ServerRoot) followed by an optional -compat"),
-    AP_INIT_FLAG("FastCgiEncAuthenticatorAuthoritative", fcgi_config_set_authoritative_slot,
-        (void *)XtOffsetOf(fcgi_dir_config, authenticator_options), ACCESS_CONF,
+    AP_INIT_FLAG("FastCgiEncAuthenticatorAuthoritative", fcgienc_config_set_authoritative_slot,
+        (void *)XtOffsetOf(fcgienc_dir_config, authenticator_options), ACCESS_CONF,
         "Set to 'off' to allow authentication to be passed along to lower modules upon failure"),
 
-    AP_INIT_TAKE12("FastCgiEncAuthorizer", fcgi_config_new_auth_server,
-        (void *)FCGI_AUTH_TYPE_AUTHORIZER, ACCESS_CONF,
+    AP_INIT_TAKE12("FastCgiEncAuthorizer", fcgienc_config_new_auth_server,
+        (void *)FCGIENC_AUTH_TYPE_AUTHORIZER, ACCESS_CONF,
         "a encrypt-script path (absolute or relative to ServerRoot) followed by an optional -compat"),
-    AP_INIT_FLAG("FastCgiEncAuthorizerAuthoritative", fcgi_config_set_authoritative_slot,
-        (void *)XtOffsetOf(fcgi_dir_config, authorizer_options), ACCESS_CONF,
+    AP_INIT_FLAG("FastCgiEncAuthorizerAuthoritative", fcgienc_config_set_authoritative_slot,
+        (void *)XtOffsetOf(fcgienc_dir_config, authorizer_options), ACCESS_CONF,
         "Set to 'off' to allow authorization to be passed along to lower modules upon failure"),
 
-    AP_INIT_TAKE12("FastCgiEncAccessChecker", fcgi_config_new_auth_server,
-        (void *)FCGI_AUTH_TYPE_ACCESS_CHECKER, ACCESS_CONF,
+    AP_INIT_TAKE12("FastCgiEncAccessChecker", fcgienc_config_new_auth_server,
+        (void *)FCGIENC_AUTH_TYPE_ACCESS_CHECKER, ACCESS_CONF,
         "a encrypt-script path (absolute or relative to ServerRoot) followed by an optional -compat"),
-    AP_INIT_FLAG("FastCgiEncAccessCheckerAuthoritative", fcgi_config_set_authoritative_slot,
-        (void *)XtOffsetOf(fcgi_dir_config, access_checker_options), ACCESS_CONF,
+    AP_INIT_FLAG("FastCgiEncAccessCheckerAuthoritative", fcgienc_config_set_authoritative_slot,
+        (void *)XtOffsetOf(fcgienc_dir_config, access_checker_options), ACCESS_CONF,
         "Set to 'off' to allow access control to be passed along to lower modules upon failure"),
 
-	AP_INIT_TAKE2("FastCgiEncLogpath",  fcgi_config_set_logpath, NULL, RSRC_CONF, NULL),
-	AP_INIT_TAKE1("FastCgiEncMemcachedServer",  fcgi_config_set_memcached, NULL, RSRC_CONF, NULL),
+    AP_INIT_TAKE2("FastCgiEncLogpath",  fcgienc_config_set_logpath, NULL, RSRC_CONF, NULL),
+    AP_INIT_TAKE1("FastCgiEncMemcachedServer",  fcgienc_config_set_memcached, NULL, RSRC_CONF, NULL),
 
-	AP_INIT_TAKE1("FastCgiEncEncrypt",  fcgi_config_set_encrypt, NULL, RSRC_CONF, NULL),
-	AP_INIT_TAKE1("FastCgiEncDecrypt",  fcgi_config_set_decrypt, NULL, RSRC_CONF, NULL),
+    AP_INIT_TAKE1("FastCgiEncEncrypt",  fcgienc_config_set_encrypt, NULL, RSRC_CONF, NULL),
+    AP_INIT_TAKE1("FastCgiEncDecrypt",  fcgienc_config_set_decrypt, NULL, RSRC_CONF, NULL),
 
-	AP_INIT_TAKE1("FastCgiEncAuthServer",  fcgi_config_set_authserver, NULL, RSRC_CONF, NULL),
-	AP_INIT_TAKE1("FastCgiEncMasterKeyServer",  fcgi_config_set_masterkeyserver, NULL, RSRC_CONF, NULL),
-	AP_INIT_TAKE1("FastCgiEncDataKeyServer",  fcgi_config_set_datakeyserver, NULL, RSRC_CONF, NULL),
+    AP_INIT_TAKE1("FastCgiEncAuthServer",  fcgienc_config_set_authserver, NULL, RSRC_CONF, NULL),
+    AP_INIT_TAKE1("FastCgiEncMasterKeyServer",  fcgienc_config_set_masterkeyserver, NULL, RSRC_CONF, NULL),
+    AP_INIT_TAKE1("FastCgiEncDataKeyServer",  fcgienc_config_set_datakeyserver, NULL, RSRC_CONF, NULL),
 
-	AP_INIT_TAKE1("FastCgiEncKeyString",  fcgi_config_set_keystring, NULL, RSRC_CONF, NULL),
+    AP_INIT_TAKE1("FastCgiEncKeyString",  fcgienc_config_set_keystring, NULL, RSRC_CONF, NULL),
 
-	AP_INIT_TAKE1("FastCgiEncUserName",  fcgi_config_set_username, NULL, RSRC_CONF, NULL),
-	AP_INIT_TAKE1("FastCgiEncPassword",  fcgi_config_set_password, NULL, RSRC_CONF, NULL),
+    AP_INIT_TAKE1("FastCgiEncUserName",  fcgienc_config_set_username, NULL, RSRC_CONF, NULL),
+    AP_INIT_TAKE1("FastCgiEncPassword",  fcgienc_config_set_password, NULL, RSRC_CONF, NULL),
 
     { NULL }
 };
@@ -3217,7 +3108,7 @@ static void register_hooks(apr_pool_t * p)
 {
     /* ap_hook_pre_config(x_pre_config, NULL, NULL, APR_HOOK_MIDDLE); */
     ap_hook_post_config(init_module, NULL, NULL, APR_HOOK_MIDDLE);
-    ap_hook_child_init(fcgi_child_init, NULL, NULL, APR_HOOK_MIDDLE);
+    ap_hook_child_init(fcgienc_child_init, NULL, NULL, APR_HOOK_MIDDLE);
     ap_hook_handler(content_handler, NULL, NULL, APR_HOOK_MIDDLE);
     ap_hook_check_user_id(check_user_authentication, NULL, NULL, APR_HOOK_MIDDLE);
     ap_hook_access_checker(check_access, NULL, NULL, APR_HOOK_MIDDLE);
@@ -3225,38 +3116,34 @@ static void register_hooks(apr_pool_t * p)
     ap_hook_fixups(fixups, NULL, NULL, APR_HOOK_MIDDLE); 
 }
 
-#ifdef APACHE24
-AP_DECLARE_MODULE(encrypt) =
-#else
 module AP_MODULE_DECLARE_DATA encrypt_module =
-#endif
 {
     STANDARD20_MODULE_STUFF,
-    fcgi_config_create_dir_config,  /* per-directory config creator */
+    fcgienc_config_create_dir_config,  /* per-directory config creator */
     NULL,                           /* dir config merger */
     NULL,                           /* server config creator */
     NULL,                           /* server config merger */
-    fastcgi_cmds,                   /* command table */
+    encrypt_cmds,                   /* command table */
     register_hooks,                 /* set up other request processing hooks */
 };
 
 #else /* !APACHE2 */
 
-handler_rec fastcgi_handlers[] = {
-    { FCGI_MAGIC_TYPE, content_handler },
-    { FASTCGIENC_HANDLER_NAME, content_handler },
+handler_rec encrypt_handlers[] = {
+    { FCGIENC_MAGIC_TYPE, content_handler },
+    { ENCRYPT_HANDLER_NAME, content_handler },
     { NULL }
 };
 
 module MODULE_VAR_EXPORT encrypt_module = {
     STANDARD_MODULE_STUFF,
     init_module,              /* initializer */
-    fcgi_config_create_dir_config,    /* per-dir config creator */
+    fcgienc_config_create_dir_config,    /* per-dir config creator */
     NULL,                      /* per-dir config merger (default: override) */
     NULL,                      /* per-server config creator */
     NULL,                      /* per-server config merger (default: override) */
-    fastcgi_cmds,              /* command table */
-    fastcgi_handlers,          /* [9] content handlers */
+    encrypt_cmds,              /* command table */
+    encrypt_handlers,          /* [9] content handlers */
     NULL,                      /* [2] URI-to-filename translation */
     check_user_authentication, /* [5] authenticate user_id */
     check_user_authorization,  /* [6] authorize user_id */
@@ -3265,9 +3152,9 @@ module MODULE_VAR_EXPORT encrypt_module = {
     fixups,                    /* [8] fixups */
     NULL,                      /* [10] logger */
     NULL,                      /* [3] header-parser */
-    fcgi_child_init,           /* process initialization */
+    fcgienc_child_init,           /* process initialization */
 #ifdef WIN32
-    fcgi_child_exit,           /* process exit/cleanup */
+    fcgienc_child_exit,           /* process exit/cleanup */
 #else
     NULL,
 #endif

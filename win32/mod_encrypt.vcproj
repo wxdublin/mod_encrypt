@@ -326,111 +326,119 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
-				RelativePath="..\aes256cbc.c"
+				RelativePath="..\fcgienc.h"
 				>
 			</File>
 			<File
-				RelativePath="..\aes256cbc.h"
+				RelativePath="..\fcgienc_aes256cbc.c"
 				>
 			</File>
 			<File
-				RelativePath="..\aes256ctr.c"
+				RelativePath="..\fcgienc_aes256cbc.h"
 				>
 			</File>
 			<File
-				RelativePath="..\aes256ctr.h"
+				RelativePath="..\fcgienc_aes256ctr.c"
 				>
 			</File>
 			<File
-				RelativePath="..\base64.c"
+				RelativePath="..\fcgienc_aes256ctr.h"
 				>
 			</File>
 			<File
-				RelativePath="..\base64.h"
+				RelativePath="..\fcgienc_base64.c"
 				>
 			</File>
 			<File
-				RelativePath="..\crypt.c"
+				RelativePath="..\fcgienc_base64.h"
 				>
 			</File>
 			<File
-				RelativePath="..\crypt.h"
+				RelativePath="..\fcgienc_buf.c"
 				>
 			</File>
 			<File
-				RelativePath="..\encap.c"
+				RelativePath="..\fcgienc_config.c"
 				>
 			</File>
 			<File
-				RelativePath="..\encap.h"
+				RelativePath="..\fcgienc_crypt.c"
 				>
 			</File>
 			<File
-				RelativePath="..\fcgi.h"
+				RelativePath="..\fcgienc_crypt.h"
 				>
 			</File>
 			<File
-				RelativePath="..\fcgi_buf.c"
+				RelativePath="..\fcgienc_encap.c"
 				>
 			</File>
 			<File
-				RelativePath="..\fcgi_config.c"
+				RelativePath="..\fcgienc_encap.h"
 				>
 			</File>
 			<File
-				RelativePath="..\fcgi_pm.c"
+				RelativePath="..\fcgienc_json.c"
 				>
 			</File>
 			<File
-				RelativePath="..\fcgi_protocol.c"
+				RelativePath="..\fcgienc_json.h"
 				>
 			</File>
 			<File
-				RelativePath="..\fcgi_protocol.h"
+				RelativePath="..\fcgienc_key.c"
 				>
 			</File>
 			<File
-				RelativePath="..\fcgi_util.c"
+				RelativePath="..\fcgienc_key.h"
 				>
 			</File>
 			<File
-				RelativePath="..\json.c"
+				RelativePath="..\fcgienc_keythread.c"
 				>
 			</File>
 			<File
-				RelativePath="..\json.h"
+				RelativePath="..\fcgienc_keythread.h"
 				>
 			</File>
 			<File
-				RelativePath="..\key.c"
+				RelativePath="..\fcgienc_log.c"
 				>
 			</File>
 			<File
-				RelativePath="..\key.h"
+				RelativePath="..\fcgienc_log.h"
 				>
 			</File>
 			<File
-				RelativePath="..\keythread.c"
+				RelativePath="..\fcgienc_memcache.c"
 				>
 			</File>
 			<File
-				RelativePath="..\keythread.h"
+				RelativePath="..\fcgienc_memcache.h"
 				>
 			</File>
 			<File
-				RelativePath="..\log.c"
+				RelativePath="..\fcgienc_pm.c"
 				>
 			</File>
 			<File
-				RelativePath="..\log.h"
+				RelativePath="..\fcgienc_protocol.c"
 				>
 			</File>
 			<File
-				RelativePath="..\memcache.c"
+				RelativePath="..\fcgienc_protocol.h"
 				>
 			</File>
 			<File
-				RelativePath="..\memcache.h"
+				RelativePath="..\fcgienc_utctime.c"
+				>
+			</File>
+			<File
+				RelativePath="..\fcgienc_utctime.h"
+				>
+			</File>
+			<File
+				RelativePath="..\fcgienc_util.c"
 				>
 			</File>
 			<File
@@ -439,14 +447,6 @@
 			</File>
 			<File
 				RelativePath="..\mod_encrypt.h"
-				>
-			</File>
-			<File
-				RelativePath="..\utctime.c"
-				>
-			</File>
-			<File
-				RelativePath="..\utctime.h"
 				>
 			</File>
 			<Filter

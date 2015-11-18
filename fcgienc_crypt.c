@@ -14,26 +14,26 @@
 
 #include <openssl/bn.h>
 
-#include "fcgi.h"
-#include "aes256ctr.h"
-#include "aes256cbc.h"
-#include "crypt.h"
-#include "key.h"
+#include "fcgienc.h"
+#include "fcgienc_aes256ctr.h"
+#include "fcgienc_aes256cbc.h"
+#include "fcgienc_crypt.h"
+#include "fcgienc_key.h"
 
 ////////////////////////////////////////////////////////////////////////// 
 
-int InitEncrypt(fcgi_crypt * encryptor)
+int InitEncrypt(fcgienc_crypt * encryptor)
 {
-	if (!fcgi_authserver || !fcgi_masterkeyserver || !fcgi_datakeyserver)
+	if (!fcgienc_authserver || !fcgienc_masterkeyserver || !fcgienc_datakeyserver)
 	{
-		if (fcgi_cryptkeystring)
+		if (fcgienc_cryptkeystring)
 		{
 			// only for testing without key servers
-			encryptor->dataKeyLength = strlen(fcgi_cryptkeystring);
+			encryptor->dataKeyLength = strlen(fcgienc_cryptkeystring);
 			if (encryptor->dataKeyLength > 256)
 				encryptor->dataKeyLength = 256;
 			
-			memcpy(encryptor->dataKey, fcgi_cryptkeystring, encryptor->dataKeyLength);
+			memcpy(encryptor->dataKey, fcgienc_cryptkeystring, encryptor->dataKeyLength);
 		}
 		else
 		{
@@ -61,18 +61,18 @@ int InitEncrypt(fcgi_crypt * encryptor)
 	return 0;
 }
 
-int InitDecrypt(fcgi_crypt * decryptor)
+int InitDecrypt(fcgienc_crypt * decryptor)
 {
-	if (!fcgi_authserver || !fcgi_masterkeyserver || !fcgi_datakeyserver)
+	if (!fcgienc_authserver || !fcgienc_masterkeyserver || !fcgienc_datakeyserver)
 	{
-		if (fcgi_cryptkeystring)
+		if (fcgienc_cryptkeystring)
 		{
 			// only for testing without key servers
-			decryptor->dataKeyLength = strlen(fcgi_cryptkeystring);
+			decryptor->dataKeyLength = strlen(fcgienc_cryptkeystring);
 			if (decryptor->dataKeyLength > 256)
 				decryptor->dataKeyLength = 256;
 
-			memcpy(decryptor->dataKey, fcgi_cryptkeystring, decryptor->dataKeyLength);
+			memcpy(decryptor->dataKey, fcgienc_cryptkeystring, decryptor->dataKeyLength);
 		}
 		else
 		{
@@ -100,7 +100,7 @@ int InitDecrypt(fcgi_crypt * decryptor)
 	return 0;
 }
 
-void CloseCrypt(fcgi_crypt * cryptor)
+void CloseCrypt(fcgienc_crypt * cryptor)
 {
 	if (!cryptor || !cryptor->crypt)
 	{
@@ -114,7 +114,7 @@ void CloseCrypt(fcgi_crypt * cryptor)
  * Encrypt any data by AES ctr encryption algorithm
  */ 
 
-void CryptDataStream(fcgi_crypt * cryptor, char *data, int offset, int len)
+void CryptDataStream(fcgienc_crypt * cryptor, char *data, int offset, int len)
 {
 	EVP_CIPHER_CTX *ctx;
 	unsigned char buff[BUF_SIZE];

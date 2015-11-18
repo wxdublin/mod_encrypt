@@ -1,8 +1,8 @@
 /*
- * $Id: fcgi_buf.c,v 1.18 2003/02/03 23:07:37 robs Exp $
+ * Baze Ilijoskki <bazeilijoskki@gmail.com>
  */
 
-#include "fcgi.h"
+#include "fcgienc.h"
 
 #ifdef WIN32
 #pragma warning( disable : 4127 )
@@ -16,7 +16,7 @@
  * Check buffer consistency with assertions.
  */
 #ifdef DEBUG
-static void fcgi_buf_check(Buffer *buf)
+static void fcgienc_buf_check(Buffer *buf)
 {
     ASSERT(buf->size > 0);
     ASSERT(buf->length >= 0);
@@ -31,13 +31,13 @@ static void fcgi_buf_check(Buffer *buf)
             == (buf->length % buf->size));
 }
 #else
-#define fcgi_buf_check(a) ((void) 0)
+#define fcgienc_buf_check(a) ((void) 0)
 #endif
  
 /*******************************************************************************
  * Reset buffer, losing any data that's in it.
  */
-void fcgi_buf_reset(Buffer *buf)
+void fcgienc_buf_reset(Buffer *buf)
 {
     buf->length = 0;
     buf->begin = buf->end = buf->data;
@@ -46,17 +46,17 @@ void fcgi_buf_reset(Buffer *buf)
 /*******************************************************************************
  * Allocate and intialize a new buffer of the specified size.
  */
-Buffer *fcgi_buf_new(pool *p, int size)
+Buffer *fcgienc_buf_new(pool *p, int size)
 {
     Buffer *buf;
 
     buf = (Buffer *)ap_pcalloc(p, sizeof(Buffer) + size);
     buf->size = size;
-    fcgi_buf_reset(buf);
+    fcgienc_buf_reset(buf);
     return buf;
 }
 
-void fcgi_buf_removed(Buffer * const b, unsigned int len)
+void fcgienc_buf_removed(Buffer * const b, unsigned int len)
 {
     b->length -= len;
     b->begin += len;
@@ -71,7 +71,7 @@ void fcgi_buf_removed(Buffer * const b, unsigned int len)
     }
 }
 
-void fcgi_buf_added(Buffer * const b, const unsigned int len)
+void fcgienc_buf_added(Buffer * const b, const unsigned int len)
 {
     b->length += len;
     b->end += len;
@@ -165,11 +165,11 @@ static int socket_send(int fd, char * buf, int len)
  *      =0 EOF reached
  *      >0 successful read or no room in buffer (NOT # of bytes read)
  */
-int fcgi_buf_socket_recv(Buffer *buf, SOCKET fd)
+int fcgienc_buf_socket_recv(Buffer *buf, SOCKET fd)
 {
     int len;
 
-    fcgi_buf_check(buf);
+    fcgienc_buf_check(buf);
 
     if (buf->length == buf->size)
         /* there's no room in the buffer, return "success" */
@@ -215,7 +215,7 @@ int fcgi_buf_socket_recv(Buffer *buf, SOCKET fd)
 
     if (len <= 0) return len;
 
-    fcgi_buf_added(buf, len);
+    fcgienc_buf_added(buf, len);
 
     return len;     /* this may not contain the number of bytes read */
 }
@@ -233,11 +233,11 @@ int fcgi_buf_socket_recv(Buffer *buf, SOCKET fd)
  *      =0 if no bytes were written
  *      >0 successful write
  */
-int fcgi_buf_socket_send(Buffer *buf, SOCKET fd)
+int fcgienc_buf_socket_send(Buffer *buf, SOCKET fd)
 {
     int len;
 
-    fcgi_buf_check(buf);
+    fcgienc_buf_check(buf);
 
     if (buf->length == 0)
         return 0;
@@ -272,7 +272,7 @@ int fcgi_buf_socket_send(Buffer *buf, SOCKET fd)
 
     if (len <= 0) return len;
 
-    fcgi_buf_removed(buf, len);
+    fcgienc_buf_removed(buf, len);
 
     return len;
 }
@@ -280,9 +280,9 @@ int fcgi_buf_socket_send(Buffer *buf, SOCKET fd)
 /*******************************************************************************
  * Return the data block start address and the length of the block.
  */
-void fcgi_buf_get_block_info(Buffer *buf, char **beginPtr, int *countPtr)
+void fcgienc_buf_get_block_info(Buffer *buf, char **beginPtr, int *countPtr)
 {
-    fcgi_buf_check(buf);
+    fcgienc_buf_check(buf);
 
     *beginPtr = buf->begin;
     *countPtr = min(buf->length, buf->data + buf->size - buf->begin);
@@ -291,9 +291,9 @@ void fcgi_buf_get_block_info(Buffer *buf, char **beginPtr, int *countPtr)
 /*******************************************************************************
  * Throw away bytes from buffer.
  */
-void fcgi_buf_toss(Buffer *buf, int count)
+void fcgienc_buf_toss(Buffer *buf, int count)
 {
-    fcgi_buf_check(buf);
+    fcgienc_buf_check(buf);
     ASSERT(count >= 0);
     ASSERT(count <= buf->length);
 
@@ -307,9 +307,9 @@ void fcgi_buf_toss(Buffer *buf, int count)
 /*******************************************************************************
  * Return the free data block start address and the length of the block.
  */
-void fcgi_buf_get_free_block_info(Buffer *buf, char **endPtr, int *countPtr)
+void fcgienc_buf_get_free_block_info(Buffer *buf, char **endPtr, int *countPtr)
 {
-    fcgi_buf_check(buf);
+    fcgienc_buf_check(buf);
 
     *endPtr = buf->end;
     *countPtr = min(buf->size - buf->length,
@@ -319,9 +319,9 @@ void fcgi_buf_get_free_block_info(Buffer *buf, char **endPtr, int *countPtr)
 /*******************************************************************************
  * Updates the buf to reflect recently added data.
  */
-void fcgi_buf_add_update(Buffer *buf, int count)
+void fcgienc_buf_add_update(Buffer *buf, int count)
 {
-    fcgi_buf_check(buf);
+    fcgienc_buf_check(buf);
     ASSERT(count >= 0);
     ASSERT(count <= BufferFree(buf));
 
@@ -331,13 +331,13 @@ void fcgi_buf_add_update(Buffer *buf, int count)
         buf->end -= buf->size;
     }
 
-    fcgi_buf_check(buf);
+    fcgienc_buf_check(buf);
 }
 
 /*******************************************************************************
  * Adds a block of data to a buffer, returning the number of bytes added.
  */
-int fcgi_buf_add_block(Buffer *buf, char *data, int datalen)
+int fcgienc_buf_add_block(Buffer *buf, char *data, int datalen)
 {
     char *end;
     int copied = 0;     /* Number of bytes actually copied. */
@@ -351,7 +351,7 @@ int fcgi_buf_add_block(Buffer *buf, char *data, int datalen)
     }
 
     ASSERT(datalen > 0);
-    fcgi_buf_check(buf);
+    fcgienc_buf_check(buf);
     end = buf->data + buf->size;
 
     /*
@@ -386,15 +386,15 @@ int fcgi_buf_add_block(Buffer *buf, char *data, int datalen)
 /*******************************************************************************
  * Add a string to a buffer, returning the number of bytes added.
  */
-int fcgi_buf_add_string(Buffer *buf, char *str)
+int fcgienc_buf_add_string(Buffer *buf, char *str)
 {
-    return fcgi_buf_add_block(buf, str, strlen(str));
+    return fcgienc_buf_add_block(buf, str, strlen(str));
 }
 
 /*******************************************************************************
  * Gets a data block from a buffer, returning the number of bytes copied.
  */
-int fcgi_buf_get_to_block(Buffer *buf, char *data, int datalen)
+int fcgienc_buf_get_to_block(Buffer *buf, char *data, int datalen)
 {
     char *end;
     int copied = 0;                /* Number of bytes actually copied. */
@@ -402,7 +402,7 @@ int fcgi_buf_get_to_block(Buffer *buf, char *data, int datalen)
 
     ASSERT(data != NULL);
     ASSERT(datalen > 0);
-    fcgi_buf_check(buf);
+    fcgienc_buf_check(buf);
 
     end = buf->data + buf->size;
 
@@ -437,7 +437,7 @@ int fcgi_buf_get_to_block(Buffer *buf, char *data, int datalen)
         copied += canCopy;
     }
 
-    fcgi_buf_check(buf);
+    fcgienc_buf_check(buf);
     return(copied);
 }
 
@@ -446,7 +446,7 @@ int fcgi_buf_get_to_block(Buffer *buf, char *data, int datalen)
  * least 'len' bytes available in the source buffer and space for 'len'
  * bytes in the destination buffer.
  */
-void fcgi_buf_get_to_buf(Buffer *dest, Buffer *src, int len)
+void fcgienc_buf_get_to_buf(Buffer *dest, Buffer *src, int len)
 {
     char *dest_end, *src_begin;
     int dest_len, src_len, move_len;
@@ -455,15 +455,15 @@ void fcgi_buf_get_to_buf(Buffer *dest, Buffer *src, int len)
     ASSERT(BufferLength(src) >= len);
     ASSERT(BufferFree(dest) >= len);
 
-    fcgi_buf_check(src);
-    fcgi_buf_check(dest);
+    fcgienc_buf_check(src);
+    fcgienc_buf_check(dest);
 
     for (;;) {
         if (len == 0)
             return;
 
-        fcgi_buf_get_free_block_info(dest, &dest_end, &dest_len);
-        fcgi_buf_get_block_info(src, &src_begin, &src_len);
+        fcgienc_buf_get_free_block_info(dest, &dest_end, &dest_len);
+        fcgienc_buf_get_block_info(src, &src_begin, &src_len);
 
         move_len = min(dest_len, src_len);
         move_len = min(move_len, len);
@@ -472,8 +472,8 @@ void fcgi_buf_get_to_buf(Buffer *dest, Buffer *src, int len)
             return;
 
         memcpy(dest_end, src_begin, move_len);
-        fcgi_buf_toss(src, move_len);
-        fcgi_buf_add_update(dest, move_len);
+        fcgienc_buf_toss(src, move_len);
+        fcgienc_buf_add_update(dest, move_len);
         len -= move_len;
     }
 }
@@ -506,11 +506,11 @@ static void array_cat_block(array_header *arr, void *block, int n)
  * Append "len" bytes from "buf" into "arr".  Apache arrays are used
  * whenever the data being handled is binary (may contain null chars).
  */
-void fcgi_buf_get_to_array(Buffer *buf, array_header *arr, int len)
+void fcgienc_buf_get_to_array(Buffer *buf, array_header *arr, int len)
 {
     int len1 = min(buf->length, buf->data + buf->size - buf->begin);
 
-    fcgi_buf_check(buf);
+    fcgienc_buf_check(buf);
     ASSERT(len > 0);
     ASSERT(len <= BufferLength(buf));
 
@@ -522,5 +522,5 @@ void fcgi_buf_get_to_array(Buffer *buf, array_header *arr, int len)
     if (len1 < len)
         array_cat_block(arr, buf->data, len - len1);
 
-    fcgi_buf_toss(buf, len);
+    fcgienc_buf_toss(buf, len);
 }

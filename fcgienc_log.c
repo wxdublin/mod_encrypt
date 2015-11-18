@@ -4,8 +4,8 @@
 #include <time.h>
 #include <sys/timeb.h>
 
-#include "fcgi.h"
-#include "log.h"
+#include "fcgienc.h"
+#include "fcgienc_log.h"
 
 void log_message(int log_level, const char *fmt, ...)
 {
@@ -21,14 +21,14 @@ void log_message(int log_level, const char *fmt, ...)
 	apr_file_t *dest_fp = NULL; 
 
 	// check parameter
-	if (!fcgi_logfp || !fcgi_logpath)
+	if (!fcgienc_logfp || !fcgienc_logpath)
 		return;
 
 	// if log_level > log level config, do not log
-	if (fcgi_loglevel < log_level)
+	if (fcgienc_loglevel < log_level)
 		return;
 
-	dest_fp = fcgi_logfp;
+	dest_fp = fcgienc_logfp;
 
 	time (&rawtime);
 	timeinfo = localtime (&rawtime);

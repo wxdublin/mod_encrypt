@@ -2,8 +2,8 @@
  * Copyright (c) 2015 Baze Ilijoskki <bazeilijoskki@gmail.com>
  */
 
-#ifndef _KEY_H__
-#define _KEY_H__
+#ifndef _FCGIENC_KEY_H__
+#define _FCGIENC_KEY_H__
 
 // Lengths
 #define URL_SIZE 256
@@ -22,7 +22,7 @@
 
 #define KEY_STORE_PERIOD		(7*24*3600)			// a week
 
-int key_active_request(fcgi_crypt * fc);
-int key_old_request(fcgi_crypt * fc);
+int key_active_request(fcgienc_crypt * fc);
+int key_old_request(fcgienc_crypt * fc);
 
-#endif // _KEY_H__
+#endif // _FCGIENC_KEY_H__

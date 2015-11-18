@@ -2,8 +2,8 @@
  * Copyright (c) 2015 Baze Ilijoskki <bazeilijoskki@gmail.com>
  */
 
-#ifndef _LOG_H__
-#define _LOG_H__
+#ifndef _FCGIENC_LOG_H__
+#define _FCGIENC_LOG_H__
 
 #define ENCRYPT_LOG_EMERG		0
 #define ENCRYPT_LOG_ALERT		1
@@ -16,4 +16,4 @@
 
 void log_message(int log_level, const char *fmt, ...);
 
-#endif // _LOG_H__
+#endif // _FCGIENC_LOG_H__

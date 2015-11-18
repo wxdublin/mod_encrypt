@@ -1,9 +1,10 @@
 /*
- * $Id: fcgi_config.c,v 1.54 2009/09/28 12:33:14 robs Exp $
+ * Baze Ilijoskki <bazeilijoskki@gmail.com>
  */
 
 #define CORE_PRIVATE
-#include "fcgi.h"
+#include "fcgienc.h"
+#include "fcgienc_log.h"
 
 #ifdef APACHE2
 
@@ -18,8 +19,6 @@
 #endif
 
 #endif
-
-#include "log.h"
 
 #ifdef WIN32
 /* warning C4100: unreferenced formal parameter */
@@ -58,7 +57,7 @@ static const char *get_host_n_port(pool *p, const char **arg,
 
     return NULL;
 }
-
+
 /*******************************************************************************
  * Get the next configuration directive argument, & return an u_short.
  * The pool arg should be temporary storage.
@@ -155,7 +154,7 @@ static const char *get_float(pool *p, const char **arg,
     return NULL;
 }
 
-const char *fcgi_config_set_env_var(pool *p, char **envp, unsigned int *envc, char * var)
+const char *fcgienc_config_set_env_var(pool *p, char **envp, unsigned int *envc, char * var)
 {
     if (*envc >= MAX_INIT_ENV_VARS) {
         return "too many variables, must be <= MAX_INIT_ENV_VARS";
@@ -185,7 +184,7 @@ static const char *get_env_var(pool *p, const char **arg, char **envp, unsigned 
         return "\"\"";
     }
 
-    return fcgi_config_set_env_var(p, envp, envc, val);
+    return fcgienc_config_set_env_var(p, envp, envc, val);
 }
 
 static const char *get_pass_header(pool *p, const char **arg, array_header **array)
@@ -223,7 +222,7 @@ static const char *invalid_value(pool *p, const char *cmd, const char *id,
  * thought it was.  Also the other directives should only be allowed in the
  * parent Apache server.
  */
-const char *fcgi_config_set_fcgi_uid_n_gid(int set)
+const char *fcgienc_config_set_fcgienc_uid_n_gid(int set)
 {
     static int isSet = 0;
 
@@ -234,8 +233,8 @@ const char *fcgi_config_set_fcgi_uid_n_gid(int set)
 
     if (set == 0) {
         isSet = 0;
-        fcgi_user_id = (uid_t)-1;
-        fcgi_group_id = (gid_t)-1;
+        fcgienc_user_id = (uid_t)-1;
+        fcgienc_group_id = (gid_t)-1;
         return NULL;
     }
 
@@ -247,63 +246,62 @@ const char *fcgi_config_set_fcgi_uid_n_gid(int set)
         gid = ap_group_id;
     }
 
-    if (isSet && (uid != fcgi_user_id || gid != fcgi_group_id)) {
+    if (isSet && (uid != fcgienc_user_id || gid != fcgienc_group_id)) {
         return "User/Group commands must preceed FastCGIENC server definitions";
     }
 
     isSet = 1;
-    fcgi_user_id = uid;
-    fcgi_group_id = gid;
+    fcgienc_user_id = uid;
+    fcgienc_group_id = gid;
 
 #endif /* !WIN32 */
 
     return NULL;
 }
 
-apcb_t fcgi_config_reset_globals(void* dummy)
+apcb_t fcgienc_config_reset_globals(void* dummy)
 {
-    fcgi_config_pool = NULL;
-    fcgi_servers = NULL;
-    fcgi_config_set_fcgi_uid_n_gid(0);
-    fcgi_wrapper = NULL;
-    fcgi_socket_dir = NULL;
+    fcgienc_config_pool = NULL;
+    fcgienc_servers = NULL;
+    fcgienc_config_set_fcgienc_uid_n_gid(0);
+    fcgienc_wrapper = NULL;
+    fcgienc_socket_dir = NULL;
     
-    fcgi_dynamic_total_proc_count = 0;
-    fcgi_dynamic_epoch = 0;
-    fcgi_dynamic_last_analyzed = 0;
+    fcgienc_dynamic_total_proc_count = 0;
+    fcgienc_dynamic_epoch = 0;
+    fcgienc_dynamic_last_analyzed = 0;
 
-    dynamicMaxProcs = FCGI_DEFAULT_MAX_PROCS;
-    dynamicMinProcs = FCGI_DEFAULT_MIN_PROCS;
-    dynamicMaxClassProcs = FCGI_DEFAULT_MAX_CLASS_PROCS;
-    dynamicKillInterval = FCGI_DEFAULT_KILL_INTERVAL;
-    dynamicUpdateInterval = FCGI_DEFAULT_UPDATE_INTERVAL;
-    dynamicGain = FCGI_DEFAULT_GAIN;
-    dynamicThreshold1 = FCGI_DEFAULT_THRESHOLD_1;
-    dynamicThresholdN = FCGI_DEFAULT_THRESHOLD_N;
-    dynamicPleaseStartDelay = FCGI_DEFAULT_START_PROCESS_DELAY;
-    dynamicAppConnectTimeout = FCGI_DEFAULT_APP_CONN_TIMEOUT;
-    dynamicEnvp = &fcgi_empty_env;
-    dynamicProcessSlack = FCGI_DEFAULT_PROCESS_SLACK;
-    dynamicAutoRestart = FCGI_DEFAULT_RESTART_DYNAMIC;
-    dynamicAutoUpdate = FCGI_DEFAULT_AUTOUPDATE;
-    dynamicListenQueueDepth = FCGI_DEFAULT_LISTEN_Q;
+    dynamicMaxProcs = FCGIENC_DEFAULT_MAX_PROCS;
+    dynamicMinProcs = FCGIENC_DEFAULT_MIN_PROCS;
+    dynamicMaxClassProcs = FCGIENC_DEFAULT_MAX_CLASS_PROCS;
+    dynamicKillInterval = FCGIENC_DEFAULT_KILL_INTERVAL;
+    dynamicUpdateInterval = FCGIENC_DEFAULT_UPDATE_INTERVAL;
+    dynamicGain = FCGIENC_DEFAULT_GAIN;
+    dynamicThreshold1 = FCGIENC_DEFAULT_THRESHOLD_1;
+    dynamicThresholdN = FCGIENC_DEFAULT_THRESHOLD_N;
+    dynamicPleaseStartDelay = FCGIENC_DEFAULT_START_PROCESS_DELAY;
+    dynamicAppConnectTimeout = FCGIENC_DEFAULT_APP_CONN_TIMEOUT;
+    dynamicEnvp = &fcgienc_empty_env;
+    dynamicProcessSlack = FCGIENC_DEFAULT_PROCESS_SLACK;
+    dynamicAutoRestart = FCGIENC_DEFAULT_RESTART_DYNAMIC;
+    dynamicAutoUpdate = FCGIENC_DEFAULT_AUTOUPDATE;
+    dynamicListenQueueDepth = FCGIENC_DEFAULT_LISTEN_Q;
     dynamicInitStartDelay = DEFAULT_INIT_START_DELAY;
-    dynamicRestartDelay = FCGI_DEFAULT_RESTART_DELAY;
-    dynamicMinServerLife = FCGI_DEFAULT_MIN_SERVER_LIFE;
-    dynamicMaxFailedStarts = FCGI_DEFAULT_MAX_FAILED_STARTS;
+    dynamicRestartDelay = FCGIENC_DEFAULT_RESTART_DELAY;
+    dynamicMinServerLife = FCGIENC_DEFAULT_MIN_SERVER_LIFE;
     dynamic_pass_headers = NULL;
-    dynamic_idle_timeout = FCGI_DEFAULT_IDLE_TIMEOUT;
-	dynamicFlush = FCGI_FLUSH;
+    dynamic_idle_timeout = FCGIENC_DEFAULT_IDLE_TIMEOUT;
+	dynamicFlush = FCGIENC_FLUSH;
 
 #ifndef WIN32
 	/* Close any old pipe (HUP/USR1) */
-	if (fcgi_pm_pipe[0] != -1) {
-		close(fcgi_pm_pipe[0]);
-		fcgi_pm_pipe[0] = -1;
+	if (fcgienc_pm_pipe[0] != -1) {
+		close(fcgienc_pm_pipe[0]);
+		fcgienc_pm_pipe[0] = -1;
 	}
-	if (fcgi_pm_pipe[1] != -1) {
-		close(fcgi_pm_pipe[1]);
-		fcgi_pm_pipe[1] = -1;
+	if (fcgienc_pm_pipe[1] != -1) {
+		close(fcgienc_pm_pipe[1]);
+		fcgienc_pm_pipe[1] = -1;
 	}
 #endif
 
@@ -311,9 +309,9 @@ apcb_t fcgi_config_reset_globals(void* dummy)
 }
 
 /*******************************************************************************
- * Create a file to hold fastcgi encrypt log.
+ * Create a file to hold fastcgienc encrypt log.
  */
-const char *fcgi_config_make_logfile(pool *tp, char *path)
+const char *fcgienc_config_make_logfile(pool *tp, char *path)
 {
     struct stat finfo;
     const char *err = NULL;
@@ -340,7 +338,7 @@ const char *fcgi_config_make_logfile(pool *tp, char *path)
 	}
 
     /* No, but maybe we can create it */
-	if ((rv = apr_file_open(&fcgi_logfp, fcgi_logpath, \
+	if ((rv = apr_file_open(&fcgienc_logfp, fcgienc_logpath, \
 		APR_FOPEN_CREATE | APR_FOPEN_WRITE | APR_FOPEN_APPEND | APR_FOPEN_XTHREAD | 0, \
 		APR_OS_DEFAULT, tp)) != APR_SUCCESS)
     {
@@ -358,26 +356,13 @@ const char *fcgi_config_make_logfile(pool *tp, char *path)
     }
 #endif
 
-    /* Can we RWX in there? */
-#ifdef WIN32
-    err = fcgi_util_check_access(tp, NULL, &finfo, _S_IREAD | _S_IWRITE | _S_IEXEC, fcgi_user_id, fcgi_group_id);
-#else
-    err = fcgi_util_check_access(tp, NULL, &finfo, R_OK | W_OK | X_OK,
-                      fcgi_user_id, fcgi_group_id);
-#endif
-    if (err != NULL) {
-        return ap_psprintf(tp,
-            "access for server (uid %ld, gid %ld) failed: %s",
-            (long)fcgi_user_id, (long)fcgi_group_id, err);
-    }
-
     return NULL;
 }
 
 /*******************************************************************************
  * Create a directory to hold Unix/Domain sockets.
  */
-const char *fcgi_config_make_dir(pool *tp, char *path)
+const char *fcgienc_config_make_dir(pool *tp, char *path)
 {
     struct stat finfo;
     const char *err = NULL;
@@ -423,15 +408,15 @@ const char *fcgi_config_make_dir(pool *tp, char *path)
 
         /* Can we RWX in there? */
 #ifdef WIN32
-        err = fcgi_util_check_access(tp, NULL, &finfo, _S_IREAD | _S_IWRITE | _S_IEXEC, fcgi_user_id, fcgi_group_id);
+        err = fcgienc_util_check_access(tp, NULL, &finfo, _S_IREAD | _S_IWRITE | _S_IEXEC, fcgienc_user_id, fcgienc_group_id);
 #else
-        err = fcgi_util_check_access(tp, NULL, &finfo, R_OK | W_OK | X_OK,
-                          fcgi_user_id, fcgi_group_id);
+        err = fcgienc_util_check_access(tp, NULL, &finfo, R_OK | W_OK | X_OK,
+                          fcgienc_user_id, fcgienc_group_id);
 #endif
         if (err != NULL) {
             return ap_psprintf(tp,
                 "access for server (uid %ld, gid %ld) failed: %s",
-                (long)fcgi_user_id, (long)fcgi_group_id, err);
+                (long)fcgienc_user_id, (long)fcgienc_group_id, err);
         }
     }
     return NULL;
@@ -442,15 +427,15 @@ const char *fcgi_config_make_dir(pool *tp, char *path)
  * already exists we don't mess with it unless 'wax' is set.
  */
 #ifndef WIN32
-const char *fcgi_config_make_dynamic_dir(pool *p, const int wax)
+const char *fcgienc_config_make_dynamic_dir(pool *p, const int wax)
 {
     const char *err;
     pool *tp;
 
-    fcgi_dynamic_dir = ap_pstrcat(p, fcgi_socket_dir, "/dynamic", NULL);
+    fcgienc_dynamic_dir = ap_pstrcat(p, fcgienc_socket_dir, "/dynamic", NULL);
 
-    if ((err = fcgi_config_make_dir(p, fcgi_dynamic_dir)))
-        return ap_psprintf(p, "can't create dynamic directory \"%s\": %s", fcgi_dynamic_dir, err);
+    if ((err = fcgienc_config_make_dir(p, fcgienc_dynamic_dir)))
+        return ap_psprintf(p, "can't create dynamic directory \"%s\": %s", fcgienc_dynamic_dir, err);
 
     /* Don't step on a running server unless its OK. */
     if (!wax)
@@ -464,7 +449,7 @@ const char *fcgi_config_make_dynamic_dir(pool *p, const int wax)
         if (apr_pool_create(&tp, p))
             return "apr_pool_create() failed";
 
-        if (apr_dir_open(&dir, fcgi_dynamic_dir, tp))
+        if (apr_dir_open(&dir, fcgienc_dynamic_dir, tp))
             return "apr_dir_open() failed";
 
         /* delete the contents */
@@ -485,11 +470,11 @@ const char *fcgi_config_make_dynamic_dir(pool *p, const int wax)
 
         tp = ap_make_sub_pool(p);
 
-        dp = ap_popendir(tp, fcgi_dynamic_dir);
+        dp = ap_popendir(tp, fcgienc_dynamic_dir);
         if (dp == NULL) {
             ap_destroy_pool(tp);
             return ap_psprintf(p, "can't open dynamic directory \"%s\": %s",
-                fcgi_dynamic_dir, strerror(errno));
+                fcgienc_dynamic_dir, strerror(errno));
         }
 
         /* delete the contents */
@@ -499,7 +484,7 @@ const char *fcgi_config_make_dynamic_dir(pool *p, const int wax)
             if (strcmp(dirp->d_name, ".") == 0 || strcmp(dirp->d_name, "..") == 0)
                 continue;
 
-            unlink(ap_pstrcat(tp, fcgi_dynamic_dir, "/", dirp->d_name, NULL));
+            unlink(ap_pstrcat(tp, fcgienc_dynamic_dir, "/", dirp->d_name, NULL));
         }
     }
 
@@ -515,7 +500,7 @@ const char *fcgi_config_make_dynamic_dir(pool *p, const int wax)
  * Change the directory used for the Unix/Domain sockets from the default.
  * Create the directory and the "dynamic" subdirectory.
  */
-const char *fcgi_config_set_socket_dir(cmd_parms *cmd, void *dummy, const char *arg)
+const char *fcgienc_config_set_socket_dir(cmd_parms *cmd, void *dummy, const char *arg)
 {
     pool * const tp = cmd->temp_pool;
     const char * const name = cmd->cmd->name;
@@ -528,16 +513,16 @@ const char *fcgi_config_set_socket_dir(cmd_parms *cmd, void *dummy, const char *
         return err;
     }
 
-    if (fcgi_socket_dir) {
+    if (fcgienc_socket_dir) {
         return ap_psprintf(tp, "%s %s: already defined as \"%s\"",
-                        name, arg, fcgi_socket_dir);
+                        name, arg, fcgienc_socket_dir);
     }
 
-    err = fcgi_config_set_fcgi_uid_n_gid(1);
+    err = fcgienc_config_set_fcgienc_uid_n_gid(1);
     if (err != NULL)
         return ap_psprintf(tp, "%s %s: %s", name, arg, err);
 
-    if (fcgi_servers != NULL) {
+    if (fcgienc_servers != NULL) {
         return ap_psprintf(tp,
             "The %s command must preceed static FastCGIENC server definitions",
             name);
@@ -563,28 +548,28 @@ const char *fcgi_config_set_socket_dir(cmd_parms *cmd, void *dummy, const char *
 
 #endif
 
-    fcgi_socket_dir = arg_nc;
+    fcgienc_socket_dir = arg_nc;
 
 #ifdef WIN32
-    fcgi_dynamic_dir = ap_pstrcat(cmd->pool, fcgi_socket_dir, "dynamic", NULL);
+    fcgienc_dynamic_dir = ap_pstrcat(cmd->pool, fcgienc_socket_dir, "dynamic", NULL);
 #else
-    err = fcgi_config_make_dir(tp, fcgi_socket_dir);
+    err = fcgienc_config_make_dir(tp, fcgienc_socket_dir);
     if (err != NULL)
         return ap_psprintf(tp, "%s %s: %s", name, arg_nc, err);
 
-    err = fcgi_config_make_dynamic_dir(cmd->pool, 0);
+    err = fcgienc_config_make_dynamic_dir(cmd->pool, 0);
     if (err != NULL)
         return ap_psprintf(tp, "%s %s: %s", name, arg_nc, err);
 #endif
 
     return NULL;
 }
-
+
 /*******************************************************************************
  * Enable, disable, or specify the path to a wrapper used to invoke all
  * FastCGIENC applications.
  */
-const char *fcgi_config_set_wrapper(cmd_parms *cmd, void *dummy, const char *arg)
+const char *fcgienc_config_set_wrapper(cmd_parms *cmd, void *dummy, const char *arg)
 {
 #ifdef WIN32
     return ap_psprintf(cmd->temp_pool, 
@@ -602,23 +587,23 @@ const char *fcgi_config_set_wrapper(cmd_parms *cmd, void *dummy, const char *arg
         return err;
     }
 
-    if (fcgi_wrapper)
+    if (fcgienc_wrapper)
     {
         return ap_psprintf(tp, "%s was already set to \"%s\"",
-                           name, fcgi_wrapper);
+                           name, fcgienc_wrapper);
     }
 
-    err = fcgi_config_set_fcgi_uid_n_gid(1);
+    err = fcgienc_config_set_fcgienc_uid_n_gid(1);
     if (err != NULL)
         return ap_psprintf(tp, "%s %s: %s", name, arg, err);
 
-    if (fcgi_servers != NULL) {
+    if (fcgienc_servers != NULL) {
         return ap_psprintf(tp,
             "The %s command must preceed static FastCGIENC server definitions", name);
     }
 
     if (strcasecmp(arg, "Off") == 0) {
-        fcgi_wrapper = NULL;
+        fcgienc_wrapper = NULL;
         return NULL;
     }
 
@@ -638,15 +623,15 @@ const char *fcgi_config_set_wrapper(cmd_parms *cmd, void *dummy, const char *arg
         wrapper = ap_server_root_relative(cmd->pool, wrapper);
     }
 
-    err = fcgi_util_check_access(tp, wrapper, NULL, X_OK, fcgi_user_id, fcgi_group_id);
+    err = fcgienc_util_check_access(tp, wrapper, NULL, X_OK, fcgienc_user_id, fcgienc_group_id);
     if (err) 
     {
         return ap_psprintf(tp, "%s: \"%s\" execute access for server "
                            "(uid %ld, gid %ld) failed: %s", name, wrapper,
-                           (long) fcgi_user_id, (long) fcgi_group_id, err);
+                           (long) fcgienc_user_id, (long) fcgienc_group_id, err);
     }
 
-    fcgi_wrapper = wrapper;
+    fcgienc_wrapper = wrapper;
 
     return NULL;
 #endif /* !WIN32 */
@@ -655,9 +640,9 @@ const char *fcgi_config_set_wrapper(cmd_parms *cmd, void *dummy, const char *arg
 /*******************************************************************************
  * Configure a static FastCGIENC server.
  */
-const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const char *arg)
+const char *fcgienc_config_new_static_server(cmd_parms *cmd, void *dummy, const char *arg)
 {
-    fcgi_server *s;
+    fcgienc_server *s;
     pool *p = cmd->pool, *tp = cmd->temp_pool;
     const char *name = cmd->cmd->name;
     char *fs_path = ap_getword_conf(p, &arg);
@@ -680,7 +665,7 @@ const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const cha
     if (*fs_path == '\0')
         return "AppClass requires a pathname!?";
 
-    if ((err = fcgi_config_set_fcgi_uid_n_gid(1)) != NULL)
+    if ((err = fcgienc_config_set_fcgienc_uid_n_gid(1)) != NULL)
         return ap_psprintf(tp, "%s %s: %s", name, fs_path, err);
 
 #ifdef APACHE2
@@ -695,15 +680,15 @@ const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const cha
     ap_no2slash(fs_path);
 
     /* See if we've already got one of these configured */
-    s = fcgi_util_fs_get_by_id(fs_path, fcgi_util_get_server_uid(cmd->server),
-                               fcgi_util_get_server_gid(cmd->server));
+    s = fcgienc_util_fs_get_by_id(fs_path, fcgienc_util_get_server_uid(cmd->server),
+                               fcgienc_util_get_server_gid(cmd->server));
     if (s != NULL) {
-        if (fcgi_wrapper) {
+        if (fcgienc_wrapper) {
             return ap_psprintf(tp,
                 "%s: redefinition of a previously defined FastCGIENC "
                 "server \"%s\" with uid=%ld and gid=%ld",
-                name, fs_path, (long) fcgi_util_get_server_uid(cmd->server),
-                (long) fcgi_util_get_server_gid(cmd->server));
+                name, fs_path, (long) fcgienc_util_get_server_uid(cmd->server),
+                (long) fcgienc_util_get_server_gid(cmd->server));
         }
         else {
             return ap_psprintf(tp,
@@ -712,12 +697,12 @@ const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const cha
         }
     }
 
-    err = fcgi_util_fs_is_path_ok(tp, fs_path, NULL);
+    err = fcgienc_util_fs_is_path_ok(tp, fs_path, NULL);
     if (err != NULL) {
         return ap_psprintf(tp, "%s: \"%s\" %s", name, fs_path, err);
     }
 
-    s = fcgi_util_fs_new(p);
+    s = fcgienc_util_fs_new(p);
     s->fs_path = fs_path;
     s->directive = APP_CLASS_STANDARD;
     s->restartOnExit = TRUE;
@@ -727,19 +712,20 @@ const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const cha
 
     /* TCP FastCGIENC applications require SystemRoot be present in the environment
      * Put it in both for consistency to the application */
-    fcgi_config_set_env_var(p, envp, &envc, "SystemRoot");
+    fcgienc_config_set_env_var(p, envp, &envc, "SystemRoot");
 
     mutex = CreateMutex(NULL, FALSE, fs_path);
     
     if (mutex == NULL)
     {
-		log_message(ENCRYPT_LOG_ALERT, "FastCGIENC: CreateMutex() failed");
+        ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server,
+            "FastCGIENC: CreateMutex() failed");
         return "failed to create FastCGIENC application accept mutex";
     }
     
     SetHandleInformation(mutex, HANDLE_FLAG_INHERIT, TRUE);
 
-    s->mutex_env_string = ap_psprintf(p, "_FCGI_MUTEX_=%ld", mutex);
+    s->mutex_env_string = ap_psprintf(p, "_FCGIENC_MUTEX_=%ld", mutex);
 
 #endif
 
@@ -761,10 +747,6 @@ const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const cha
         }
         else if (strcasecmp(option, "-min-server-life") == 0) {
             if ((err = get_u_int(tp, &arg, &s->minServerLife, 0)))
-                return invalid_value(tp, name, NULL, option, err);
-        }
-        else if (strcasecmp(option, "-max-failed-starts") == 0) {
-            if ((err = get_u_int(tp, &arg, &s->maxFailedStarts, 0)))
                 return invalid_value(tp, name, NULL, option, err);
         }
         else if (strcasecmp(option, "-priority") == 0) {
@@ -832,16 +814,16 @@ const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const cha
     } /* while */
 
 #ifndef WIN32
-    if (fcgi_wrapper)
+    if (fcgienc_wrapper)
     {
         if (s->group == NULL)
         {
-            s->group = ap_psprintf(tp, "#%ld", (long) fcgi_util_get_server_gid(cmd->server));
+            s->group = ap_psprintf(tp, "#%ld", fcgienc_util_get_server_gid(cmd->server));
         }
 
         if (s->user == NULL)
         {
-            s->user = ap_psprintf(p, "#%ld", (long) fcgi_util_get_server_uid(cmd->server)); 
+            s->user = ap_psprintf(p, "#%ld", fcgienc_util_get_server_uid(cmd->server)); 
         }
 
         s->uid = ap_uname2id(s->user);
@@ -849,10 +831,11 @@ const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const cha
     }
     else if (s->user || s->group)
     {
-		log_message(ENCRYPT_LOG_WARN, "FastCGIENC: there is no fastcgi wrapper set, user/group options are ignored");
+        ap_log_error(FCGIENC_LOG_WARN, cmd->server, "FastCGIENC: there is no "
+                     "encrypt wrapper set, user/group options are ignored");
     }
 
-    if ((err = fcgi_util_fs_set_uid_n_gid(p, s, s->uid, s->gid)))
+    if ((err = fcgienc_util_fs_set_uid_n_gid(p, s, s->uid, s->gid)))
     {
         return ap_psprintf(tp, 
             "%s %s: invalid user or group: %s", name, fs_path, err);
@@ -870,36 +853,36 @@ const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const cha
     memcpy(s->envp, envp, sizeof(char *) * envc);
 
     /* Initialize process structs */
-    s->procs = fcgi_util_fs_create_procs(p, s->numProcesses);
+    s->procs = fcgienc_util_fs_create_procs(p, s->numProcesses);
 
     /* Build the appropriate sockaddr structure */
     if (s->port != 0) {
-        err = fcgi_util_socket_make_inet_addr(p, (struct sockaddr_in **)&s->socket_addr,
+        err = fcgienc_util_socket_make_inet_addr(p, (struct sockaddr_in **)&s->socket_addr,
                                 &s->socket_addr_len, NULL, s->port);
         if (err != NULL)
             return ap_psprintf(tp, "%s %s: %s", name, fs_path, err);
 #ifdef WIN32
-        err = fcgi_util_socket_make_inet_addr(p, (struct sockaddr_in **)&s->dest_addr,
+        err = fcgienc_util_socket_make_inet_addr(p, (struct sockaddr_in **)&s->dest_addr,
                                           &s->socket_addr_len, "localhost", s->port);
         if (err != NULL)
             return ap_psprintf(tp, "%s %s: %s", name, fs_path, err);
 #endif
     } else {
         if (s->socket_path == NULL)
-             s->socket_path = fcgi_util_socket_hash_filename(tp, fs_path, s->user, s->group);
+             s->socket_path = fcgienc_util_socket_hash_filename(tp, fs_path, s->user, s->group);
 
-        if (fcgi_socket_dir == NULL)
+        if (fcgienc_socket_dir == NULL)
         {
 #ifdef WIN32
-            fcgi_socket_dir = DEFAULT_SOCK_DIR;
+            fcgienc_socket_dir = DEFAULT_SOCK_DIR;
 #else
-            fcgi_socket_dir = ap_server_root_relative(p, DEFAULT_SOCK_DIR);
+            fcgienc_socket_dir = ap_server_root_relative(p, DEFAULT_SOCK_DIR);
 #endif
         }
 
-        s->socket_path = fcgi_util_socket_make_path_absolute(p, s->socket_path, 0);
+        s->socket_path = fcgienc_util_socket_make_path_absolute(p, s->socket_path, 0);
 #ifndef WIN32
-        err = fcgi_util_socket_make_domain_addr(p, (struct sockaddr_un **)&s->socket_addr,
+        err = fcgienc_util_socket_make_domain_addr(p, (struct sockaddr_un **)&s->socket_addr,
                                   &s->socket_addr_len, s->socket_path);
         if (err != NULL)
             return ap_psprintf(tp, "%s %s: %s", name, fs_path, err);
@@ -907,7 +890,7 @@ const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const cha
     }
 
     /* Add it to the list of FastCGIENC servers */
-    fcgi_util_fs_add(s);
+    fcgienc_util_fs_add(s);
 
     return NULL;
 }
@@ -915,9 +898,9 @@ const char *fcgi_config_new_static_server(cmd_parms *cmd, void *dummy, const cha
 /*******************************************************************************
  * Configure a static FastCGIENC server that is started/managed elsewhere.
  */
-const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const char *arg)
+const char *fcgienc_config_new_external_server(cmd_parms *cmd, void *dummy, const char *arg)
 {
-    fcgi_server *s;
+    fcgienc_server *s;
     pool * const p = cmd->pool, *tp = cmd->temp_pool;
     const char * const name = cmd->cmd->name;
     char *fs_path = ap_getword_conf(p, &arg);
@@ -945,15 +928,15 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
     ap_no2slash(fs_path);
 
     /* See if we've already got one of these bettys configured */
-    s = fcgi_util_fs_get_by_id(fs_path, fcgi_util_get_server_uid(cmd->server),
-                               fcgi_util_get_server_gid(cmd->server));
+    s = fcgienc_util_fs_get_by_id(fs_path, fcgienc_util_get_server_uid(cmd->server),
+                               fcgienc_util_get_server_gid(cmd->server));
     if (s != NULL) {
-        if (fcgi_wrapper) {
+        if (fcgienc_wrapper) {
             return ap_psprintf(tp,
                 "%s: redefinition of a previously defined class \"%s\" "
                 "with uid=%ld and gid=%ld",
-                name, fs_path, (long) fcgi_util_get_server_uid(cmd->server),
-                (long) fcgi_util_get_server_gid(cmd->server));
+                name, fs_path, (long) fcgienc_util_get_server_uid(cmd->server),
+                (long) fcgienc_util_get_server_gid(cmd->server));
         }
         else 
         {
@@ -962,7 +945,7 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
         }
     }
 
-    s = fcgi_util_fs_new(p);
+    s = fcgienc_util_fs_new(p);
     s->fs_path = fs_path;
     s->directive = APP_CLASS_EXTERNAL;
 
@@ -1024,16 +1007,16 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
 
 
 #ifndef WIN32
-    if (fcgi_wrapper)
+    if (fcgienc_wrapper)
     {
         if (s->group == NULL)
         {
-            s->group = ap_psprintf(tp, "#%ld", (long) fcgi_util_get_server_gid(cmd->server));
+            s->group = ap_psprintf(tp, "#%ld", fcgienc_util_get_server_gid(cmd->server));
         }
 
         if (s->user == NULL)
         {
-            s->user = ap_psprintf(p, "#%ld", (long) fcgi_util_get_server_uid(cmd->server));
+            s->user = ap_psprintf(p, "#%ld", fcgienc_util_get_server_uid(cmd->server));
         }
 
         s->uid = ap_uname2id(s->user);
@@ -1041,10 +1024,11 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
     }
     else if (s->user || s->group)
     {
-		log_message(ENCRYPT_LOG_WARN, "FastCGIENC: there is no fastcgi wrapper set, user/group options are ignored");
+        ap_log_error(FCGIENC_LOG_WARN, cmd->server, "FastCGIENC: there is no "
+                     "encrypt wrapper set, user/group options are ignored");
     }
 
-    if ((err = fcgi_util_fs_set_uid_n_gid(p, s, s->uid, s->gid)))
+    if ((err = fcgienc_util_fs_set_uid_n_gid(p, s, s->uid, s->gid)))
     {
         return ap_psprintf(tp,
             "%s %s: invalid user or group: %s", name, fs_path, err);
@@ -1064,24 +1048,24 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
 
     /* Build the appropriate sockaddr structure */
     if (s->port != 0) {
-        err = fcgi_util_socket_make_inet_addr(p, (struct sockaddr_in **)&s->socket_addr,
+        err = fcgienc_util_socket_make_inet_addr(p, (struct sockaddr_in **)&s->socket_addr,
             &s->socket_addr_len, s->host, s->port);
         if (err != NULL)
             return ap_psprintf(tp, "%s %s: %s", name, fs_path, err);
     } else {
 
-        if (fcgi_socket_dir == NULL)
+        if (fcgienc_socket_dir == NULL)
         {
 #ifdef WIN32
-            fcgi_socket_dir = DEFAULT_SOCK_DIR;
+            fcgienc_socket_dir = DEFAULT_SOCK_DIR;
 #else
-            fcgi_socket_dir = ap_server_root_relative(p, DEFAULT_SOCK_DIR);
+            fcgienc_socket_dir = ap_server_root_relative(p, DEFAULT_SOCK_DIR);
 #endif
         }
 
-        s->socket_path = fcgi_util_socket_make_path_absolute(p, s->socket_path, 0);
+        s->socket_path = fcgienc_util_socket_make_path_absolute(p, s->socket_path, 0);
 #ifndef WIN32
-        err = fcgi_util_socket_make_domain_addr(p, (struct sockaddr_un **)&s->socket_addr,
+        err = fcgienc_util_socket_make_domain_addr(p, (struct sockaddr_un **)&s->socket_addr,
                                   &s->socket_addr_len, s->socket_path);
         if (err != NULL)
             return ap_psprintf(tp, "%s %s: %s", name, fs_path, err);
@@ -1089,7 +1073,7 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
     }
 
     /* Add it to the list of FastCGIENC servers */
-    fcgi_util_fs_add(s);
+    fcgienc_util_fs_add(s);
 
     return NULL;
 }
@@ -1097,7 +1081,7 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
 /*
  *----------------------------------------------------------------------
  *
- * fcgi_config_set_config --
+ * fcgienc_config_set_config --
  *
  *      Implements the FastCGIENC FCGIConfig configuration directive.
  *      This command adds routines to control the execution of the
@@ -1106,7 +1090,7 @@ const char *fcgi_config_new_external_server(cmd_parms *cmd, void *dummy, const c
  *
  *----------------------------------------------------------------------
  */
-const char *fcgi_config_set_config(cmd_parms *cmd, void *dummy, const char *arg)
+const char *fcgienc_config_set_config(cmd_parms *cmd, void *dummy, const char *arg)
 {
     pool * const p = cmd->pool;
     pool * const tp = cmd->temp_pool;
@@ -1191,10 +1175,6 @@ const char *fcgi_config_set_config(cmd_parms *cmd, void *dummy, const char *arg)
             if ((err = get_int(tp, &arg, &dynamicMinServerLife, 0)))
                 return invalid_value(tp, name, NULL, option, err);
         }
-        else if (strcasecmp(option, "-max-failed-starts") == 0) {
-            if ((err = get_int(tp, &arg, &dynamicMaxFailedStarts, 0)))
-                return invalid_value(tp, name, NULL, option, err);
-        }
         else if (strcasecmp(option, "-restart-delay") == 0) {
             if ((err = get_u_int(tp, &arg, &dynamicRestartDelay, 0)))
                 return invalid_value(tp, name, NULL, option, err);
@@ -1229,29 +1209,29 @@ const char *fcgi_config_set_config(cmd_parms *cmd, void *dummy, const char *arg)
     }
 
     /* Move env array to a surviving pool, leave 2 extra slots for 
-     * WIN32 _FCGI_MUTEX_ and _FCGI_SHUTDOWN_EVENT_ */
+     * WIN32 _FCGIENC_MUTEX_ and _FCGIENC_SHUTDOWN_EVENT_ */
     dynamicEnvp = (char **)ap_pcalloc(p, sizeof(char *) * (envc + 4));
     memcpy(dynamicEnvp, envp, sizeof(char *) * envc);
 
     return NULL;
 }
 
-void *fcgi_config_create_dir_config(pool *p, char *dummy)
+void *fcgienc_config_create_dir_config(pool *p, char *dummy)
 {
-    fcgi_dir_config *dir_config = ap_pcalloc(p, sizeof(fcgi_dir_config));
+    fcgienc_dir_config *dir_config = ap_pcalloc(p, sizeof(fcgienc_dir_config));
 
-    dir_config->authenticator_options = FCGI_AUTHORITATIVE;
-    dir_config->authorizer_options = FCGI_AUTHORITATIVE;
-    dir_config->access_checker_options = FCGI_AUTHORITATIVE;
+    dir_config->authenticator_options = FCGIENC_AUTHORITATIVE;
+    dir_config->authorizer_options = FCGIENC_AUTHORITATIVE;
+    dir_config->access_checker_options = FCGIENC_AUTHORITATIVE;
 
     return dir_config;
 }
 
 
-const char *fcgi_config_new_auth_server(cmd_parms * cmd,
+const char *fcgienc_config_new_auth_server(cmd_parms * cmd,
     void * dircfg, const char *fs_path, const char * compat)
 {
-    fcgi_dir_config * dir_config = (fcgi_dir_config *) dircfg;
+    fcgienc_dir_config * dir_config = (fcgienc_dir_config *) dircfg;
     pool * const tp = cmd->temp_pool;
     char * auth_server;
 
@@ -1265,10 +1245,10 @@ const char *fcgi_config_new_auth_server(cmd_parms * cmd,
     auth_server = ap_server_root_relative(cmd->pool, auth_server);
 
     /* Make sure its already configured or at least a candidate for dynamic */
-    if (fcgi_util_fs_get_by_id(auth_server, fcgi_util_get_server_uid(cmd->server),
-                               fcgi_util_get_server_gid(cmd->server)) == NULL) 
+    if (fcgienc_util_fs_get_by_id(auth_server, fcgienc_util_get_server_uid(cmd->server),
+                               fcgienc_util_get_server_gid(cmd->server)) == NULL) 
     {
-        const char *err = fcgi_util_fs_is_path_ok(tp, auth_server, NULL);
+        const char *err = fcgienc_util_fs_is_path_ok(tp, auth_server, NULL);
         if (err)
             return ap_psprintf(tp, "%s: \"%s\" %s", cmd->cmd->name, auth_server, err);
     }
@@ -1276,33 +1256,33 @@ const char *fcgi_config_new_auth_server(cmd_parms * cmd,
     if (compat && strcasecmp(compat, "-compat"))
         return ap_psprintf(cmd->temp_pool, "%s: unknown option: \"%s\"", cmd->cmd->name, compat);
 
-    switch((int)(long)cmd->info) {
-        case FCGI_AUTH_TYPE_AUTHENTICATOR:
+    switch((int)cmd->info) {
+        case FCGIENC_AUTH_TYPE_AUTHENTICATOR:
             dir_config->authenticator = auth_server;
-            dir_config->authenticator_options |= (compat) ? FCGI_COMPAT : 0;
+            dir_config->authenticator_options |= (compat) ? FCGIENC_COMPAT : 0;
             break;
-        case FCGI_AUTH_TYPE_AUTHORIZER:
+        case FCGIENC_AUTH_TYPE_AUTHORIZER:
             dir_config->authorizer = auth_server;
-            dir_config->authorizer_options |= (compat) ? FCGI_COMPAT : 0;
+            dir_config->authorizer_options |= (compat) ? FCGIENC_COMPAT : 0;
             break;
-        case FCGI_AUTH_TYPE_ACCESS_CHECKER:
+        case FCGIENC_AUTH_TYPE_ACCESS_CHECKER:
             dir_config->access_checker = auth_server;
-            dir_config->access_checker_options |= (compat) ? FCGI_COMPAT : 0;
+            dir_config->access_checker_options |= (compat) ? FCGIENC_COMPAT : 0;
             break;
     }
 
     return NULL;
 }
 
-const char *fcgi_config_set_authoritative_slot(cmd_parms * cmd,
+const char *fcgienc_config_set_authoritative_slot(cmd_parms * cmd,
     void * dir_config, int arg)
 {
     int offset = (int)(long)cmd->info;
 
     if (arg)
-        *((u_char *)dir_config + offset) |= FCGI_AUTHORITATIVE;
+        *((u_char *)dir_config + offset) |= FCGIENC_AUTHORITATIVE;
     else
-        *((u_char *)dir_config + offset) &= ~FCGI_AUTHORITATIVE;
+        *((u_char *)dir_config + offset) &= ~FCGIENC_AUTHORITATIVE;
 
     return NULL;
 }
@@ -1310,7 +1290,7 @@ const char *fcgi_config_set_authoritative_slot(cmd_parms * cmd,
 /*******************************************************************************
  * Set Sproxyd log path
  */
-const char *fcgi_config_set_logpath(cmd_parms *cmd, void *dummy, const char *arg1, const char *arg2)
+const char *fcgienc_config_set_logpath(cmd_parms *cmd, void *dummy, const char *arg1, const char *arg2)
 {
     const char *err = NULL;
 
@@ -1321,13 +1301,13 @@ const char *fcgi_config_set_logpath(cmd_parms *cmd, void *dummy, const char *arg
     }
 
 	if (arg1)
-		fcgi_logpath = ap_getword_conf(cmd->pool, &arg1);
+		fcgienc_logpath = ap_getword_conf(cmd->pool, &arg1);
 
 	if (arg2)
 	{
-		fcgi_loglevel = atoi(arg2);
-		if ((fcgi_loglevel < ENCRYPT_LOG_EMERG) || (fcgi_loglevel > ENCRYPT_LOG_DEBUG))
-			fcgi_loglevel = ENCRYPT_LOG_DEBUG;
+		fcgienc_loglevel = atoi(arg2);
+		if ((fcgienc_loglevel < ENCRYPT_LOG_EMERG) || (fcgienc_loglevel > ENCRYPT_LOG_DEBUG))
+			fcgienc_loglevel = ENCRYPT_LOG_DEBUG;
 	}
 	
 	return NULL;
@@ -1336,7 +1316,7 @@ const char *fcgi_config_set_logpath(cmd_parms *cmd, void *dummy, const char *arg
 /*******************************************************************************
  * Configure Memcached server.
  */
-const char *fcgi_config_set_memcached(cmd_parms *cmd, void *dummy, const char *arg)
+const char *fcgienc_config_set_memcached(cmd_parms *cmd, void *dummy, const char *arg)
 {
     const char *err = NULL;
 
@@ -1346,7 +1326,7 @@ const char *fcgi_config_set_memcached(cmd_parms *cmd, void *dummy, const char *a
         return err;
     }
 
-	if ((err = get_host_n_port(cmd->pool, &arg, (const char **)&fcgi_memcached_server, &fcgi_memcached_port)))
+	if ((err = get_host_n_port(cmd->pool, &arg, (const char **)&fcgienc_memcached_server, &fcgienc_memcached_port)))
 		return ap_psprintf(cmd->pool, "the %s directive should be IP(Hostname):Port/On", cmd->cmd->name);
 
 	return NULL;
@@ -1355,7 +1335,7 @@ const char *fcgi_config_set_memcached(cmd_parms *cmd, void *dummy, const char *a
 /*******************************************************************************
  * Enable, disable Encrypt feature.
  */
-const char *fcgi_config_set_encrypt(cmd_parms *cmd, void *dummy, const char *arg)
+const char *fcgienc_config_set_encrypt(cmd_parms *cmd, void *dummy, const char *arg)
 {
     const char *err = NULL;
 
@@ -1366,10 +1346,10 @@ const char *fcgi_config_set_encrypt(cmd_parms *cmd, void *dummy, const char *arg
     }
 
     if (strcasecmp(arg, "Off") == 0) {
-        fcgi_encrypt_flag = FALSE;
+        fcgienc_encrypt_flag = FALSE;
     }
 	else if (strcasecmp(arg, "On") == 0) {
-        fcgi_encrypt_flag = TRUE;
+        fcgienc_encrypt_flag = TRUE;
     }
     else {
 		return ap_psprintf(cmd->temp_pool, 
@@ -1382,7 +1362,7 @@ const char *fcgi_config_set_encrypt(cmd_parms *cmd, void *dummy, const char *arg
 /*******************************************************************************
  * Enable, disable Decrypt applications.
  */
-const char *fcgi_config_set_decrypt(cmd_parms *cmd, void *dummy, const char *arg)
+const char *fcgienc_config_set_decrypt(cmd_parms *cmd, void *dummy, const char *arg)
 {
     const char *err = NULL;
 
@@ -1393,10 +1373,10 @@ const char *fcgi_config_set_decrypt(cmd_parms *cmd, void *dummy, const char *arg
     }
 
     if (strcasecmp(arg, "Off") == 0) {
-        fcgi_decrypt_flag = FALSE;
+        fcgienc_decrypt_flag = FALSE;
     }
 	else if (strcasecmp(arg, "On") == 0) {
-        fcgi_decrypt_flag = TRUE;
+        fcgienc_decrypt_flag = TRUE;
     }
     else {
 		return ap_psprintf(cmd->temp_pool, 
@@ -1409,7 +1389,7 @@ const char *fcgi_config_set_decrypt(cmd_parms *cmd, void *dummy, const char *arg
 /*******************************************************************************
  * Set Sproxyd Authentication Server.
  */
-const char *fcgi_config_set_authserver(cmd_parms *cmd, void *dummy, const char *arg)
+const char *fcgienc_config_set_authserver(cmd_parms *cmd, void *dummy, const char *arg)
 {
     const char *err = NULL;
 
@@ -1419,7 +1399,7 @@ const char *fcgi_config_set_authserver(cmd_parms *cmd, void *dummy, const char *
         return err;
     }
 
-	fcgi_authserver = ap_getword_conf(cmd->pool, &arg);
+	fcgienc_authserver = ap_getword_conf(cmd->pool, &arg);
 
 	return NULL;
 }
@@ -1427,7 +1407,7 @@ const char *fcgi_config_set_authserver(cmd_parms *cmd, void *dummy, const char *
 /*******************************************************************************
  * Set Sproxyd Master Key Server.
  */
-const char *fcgi_config_set_masterkeyserver(cmd_parms *cmd, void *dummy, const char *arg)
+const char *fcgienc_config_set_masterkeyserver(cmd_parms *cmd, void *dummy, const char *arg)
 {
     const char *err = NULL;
 
@@ -1437,7 +1417,7 @@ const char *fcgi_config_set_masterkeyserver(cmd_parms *cmd, void *dummy, const c
         return err;
     }
 
-	fcgi_masterkeyserver = ap_getword_conf(cmd->pool, &arg);
+	fcgienc_masterkeyserver = ap_getword_conf(cmd->pool, &arg);
 
 	return NULL;
 }
@@ -1445,7 +1425,7 @@ const char *fcgi_config_set_masterkeyserver(cmd_parms *cmd, void *dummy, const c
 /*******************************************************************************
  * Set Sproxyd Data Key Server.
  */
-const char *fcgi_config_set_datakeyserver(cmd_parms *cmd, void *dummy, const char *arg)
+const char *fcgienc_config_set_datakeyserver(cmd_parms *cmd, void *dummy, const char *arg)
 {
     const char *err = NULL;
 
@@ -1455,7 +1435,7 @@ const char *fcgi_config_set_datakeyserver(cmd_parms *cmd, void *dummy, const cha
         return err;
     }
 
-	fcgi_datakeyserver = ap_getword_conf(cmd->pool, &arg);
+	fcgienc_datakeyserver = ap_getword_conf(cmd->pool, &arg);
 
 	return NULL;
 }
@@ -1463,7 +1443,7 @@ const char *fcgi_config_set_datakeyserver(cmd_parms *cmd, void *dummy, const cha
 /*******************************************************************************
  * Set Crypt Key String.
  */
-const char *fcgi_config_set_keystring(cmd_parms *cmd, void *dummy, const char *arg)
+const char *fcgienc_config_set_keystring(cmd_parms *cmd, void *dummy, const char *arg)
 {
     const char *err = NULL;
 
@@ -1473,7 +1453,7 @@ const char *fcgi_config_set_keystring(cmd_parms *cmd, void *dummy, const char *a
         return err;
     }
 
-	fcgi_cryptkeystring = ap_getword_conf(cmd->pool, &arg);
+	fcgienc_cryptkeystring = ap_getword_conf(cmd->pool, &arg);
 
 	return NULL;
 }
@@ -1481,7 +1461,7 @@ const char *fcgi_config_set_keystring(cmd_parms *cmd, void *dummy, const char *a
 /*******************************************************************************
  * Set Sproxyd User Name.
  */
-const char *fcgi_config_set_username(cmd_parms *cmd, void *dummy, const char *arg)
+const char *fcgienc_config_set_username(cmd_parms *cmd, void *dummy, const char *arg)
 {
     const char *err = NULL;
 
@@ -1491,7 +1471,7 @@ const char *fcgi_config_set_username(cmd_parms *cmd, void *dummy, const char *ar
         return err;
     }
 
-	fcgi_username = ap_getword_conf(cmd->pool, &arg);
+	fcgienc_username = ap_getword_conf(cmd->pool, &arg);
 
 	return NULL;
 }
@@ -1499,7 +1479,7 @@ const char *fcgi_config_set_username(cmd_parms *cmd, void *dummy, const char *ar
 /*******************************************************************************
  * Set Sproxyd User Password.
  */
-const char *fcgi_config_set_password(cmd_parms *cmd, void *dummy, const char *arg)
+const char *fcgienc_config_set_password(cmd_parms *cmd, void *dummy, const char *arg)
 {
     const char *err = NULL;
 
@@ -1509,7 +1489,7 @@ const char *fcgi_config_set_password(cmd_parms *cmd, void *dummy, const char *ar
         return err;
     }
 
-	fcgi_password = ap_getword_conf(cmd->pool, &arg);
+	fcgienc_password = ap_getword_conf(cmd->pool, &arg);
 
 	return NULL;
 }

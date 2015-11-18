@@ -1,9 +1,9 @@
 
 #include <stdlib.h>
 #include "apr_memcache.h"
-#include "memcache.h"
-#include "fcgi.h"
-#include "log.h"
+#include "fcgienc.h"
+#include "fcgienc_memcache.h"
+#include "fcgienc_log.h"
 
 #define UNTIL	3600
 
@@ -16,7 +16,7 @@ int memcache_set(const char *key, const char *value, unsigned int timeout)
 	apr_memcache_t *memcacheD = NULL;
 	char *result;
 
-	if ((fcgi_memcached_server==NULL) || fcgi_memcached_port < 1)
+	if ((fcgienc_memcached_server==NULL) || fcgienc_memcached_port < 1)
 		return -1;
 
 	apr_initialize();
@@ -27,7 +27,7 @@ int memcache_set(const char *key, const char *value, unsigned int timeout)
 	if (rv) 
 		goto MEMCACHE_SET_EXIT;
 
-	rv = apr_memcache_server_create(memcachePool, fcgi_memcached_server, fcgi_memcached_port, 0, 1, 1, 60, &server);
+	rv = apr_memcache_server_create(memcachePool, fcgienc_memcached_server, fcgienc_memcached_port, 0, 1, 1, 60, &server);
 	if (rv) 
 		goto MEMCACHE_SET_EXIT;
 
@@ -76,7 +76,7 @@ int memcache_get(const char *key, char *value)
 	apr_memcache_t *memcacheD = NULL;
 	char *result;
 
-	if ((fcgi_memcached_server==NULL) || fcgi_memcached_port < 1)
+	if ((fcgienc_memcached_server==NULL) || fcgienc_memcached_port < 1)
 		return -1;
 
 	apr_initialize();
@@ -87,7 +87,7 @@ int memcache_get(const char *key, char *value)
 	if (rv) 
 		goto MEMCACHE_GET_EXIT;
 
-	rv = apr_memcache_server_create(memcachePool, fcgi_memcached_server, fcgi_memcached_port, 0, 1, 1, 60, &server);
+	rv = apr_memcache_server_create(memcachePool, fcgienc_memcached_server, fcgienc_memcached_port, 0, 1, 1, 60, &server);
 	if (rv) 
 		goto MEMCACHE_GET_EXIT;
 

@@ -1,9 +1,9 @@
 /*
- * $Id: fcgi_pm.c,v 1.96 2009/09/29 00:34:10 robs Exp $
+ * Baze Ilijoskki <bazeilijoskki@gmail.com>
  */
 
 
-#include "fcgi.h"
+#include "fcgienc.h"
 
 #if defined(APACHE2) && !defined(WIN32)
 #include <pwd.h>
@@ -21,10 +21,10 @@
 #define seteuid(arg) setresuid(-1, (arg), -1)
 #endif
 
-int fcgi_dynamic_total_proc_count = 0;    /* number of running apps */
-time_t fcgi_dynamic_epoch = 0;            /* last time kill_procs was
+int fcgienc_dynamic_total_proc_count = 0;    /* number of running apps */
+time_t fcgienc_dynamic_epoch = 0;            /* last time kill_procs was
                                            * invoked by process mgr */
-time_t fcgi_dynamic_last_analyzed = 0;    /* last time calculation was
+time_t fcgienc_dynamic_last_analyzed = 0;    /* last time calculation was
                                            * made for the dynamic procs */
 
 static time_t now = 0;
@@ -32,17 +32,14 @@ static time_t now = 0;
 #ifdef WIN32
 #ifdef APACHE2
 #include "mod_cgi.h"
-#include "apr_version.h"
 #endif
 #pragma warning ( disable : 4100 4102 )
 static BOOL bTimeToDie = FALSE;  /* process termination flag */
-HANDLE fcgi_event_handles[3];
+HANDLE fcgienc_event_handles[3];
 #ifndef SIGKILL
 #define SIGKILL 9
 #endif
 #endif
-
-#include "log.h"
 
 
 #ifndef WIN32
@@ -50,7 +47,8 @@ static int seteuid_root(void)
 {
     int rc = seteuid(getuid());
     if (rc) {
-		log_message(ENCRYPT_LOG_ALERT, "FastCGIENC: seteuid(0) failed");
+        ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server,
+            "FastCGIENC: seteuid(0) failed");
     }
     return rc;
 }
@@ -59,7 +57,8 @@ static int seteuid_user(void)
 {
     int rc = seteuid(ap_user_id);
     if (rc) {
-		log_message(ENCRYPT_LOG_ALERT, "FastCGIENC: seteuid(%u) failed", (unsigned)ap_user_id);
+        ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server,
+            "FastCGIENC: seteuid(%u) failed", (unsigned)ap_user_id);
     }
     return rc;
 }
@@ -73,13 +72,13 @@ static int seteuid_user(void)
  * hopes that the process will exit on its own.  Later, as we 
  * review the state of application processes, if we see one marked 
  * for death, but that hasn't died within a specified period of
- * time, fcgi_kill() is called again with a KILL)
+ * time, fcgienc_kill() is called again with a KILL)
  */
-static void fcgi_kill(ServerProcess *process, int sig)
+static void fcgienc_kill(ServerProcess *process, int sig)
 {
-    FCGIDBG3("fcgi_kill(%ld, %d)", (long) process->pid, sig);
+    FCGIDBG3("fcgienc_kill(%ld, %d)", (long) process->pid, sig);
 
-    process->state = FCGI_VICTIM_STATE;                
+    process->state = FCGIENC_VICTIM_STATE;                
 
 #ifdef WIN32
 
@@ -98,14 +97,14 @@ static void fcgi_kill(ServerProcess *process, int sig)
 
 #else /* !WIN32 */
 
-    if (fcgi_wrapper) 
+    if (fcgienc_wrapper) 
     {
         seteuid_root();
     }
 
     kill(process->pid, sig);
 
-    if (fcgi_wrapper) 
+    if (fcgienc_wrapper) 
     {
         seteuid_user();
     }
@@ -120,7 +119,7 @@ static void fcgi_kill(ServerProcess *process, int sig)
  */
 static void shutdown_all()
 {
-    fcgi_server *s = fcgi_servers;
+    fcgienc_server *s = fcgienc_servers;
     
     while (s) 
     {
@@ -129,56 +128,31 @@ static void shutdown_all()
         int numChildren = (s->directive == APP_CLASS_DYNAMIC)
             ? dynamicMaxClassProcs
             : s->numProcesses;
+        
+#ifndef WIN32
+        if (s->socket_path != NULL && s->directive != APP_CLASS_EXTERNAL) 
+        {
+            /* Remove the socket file */
+            if (unlink(s->socket_path) != 0 && errno != ENOENT) {
+                ap_log_error(FCGIENC_LOG_ERR, fcgienc_apache_main_server,
+                    "FastCGIENC: unlink() failed to remove socket file \"%s\" for%s server \"%s\"",
+                    s->socket_path,
+                    (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "", s->fs_path);
+            }
+        }
+#endif
 
         /* Send TERM to all processes */
         for (i = 0; i < numChildren; i++, proc++) 
         {
-            if (proc->state == FCGI_RUNNING_STATE) 
+            if (proc->state == FCGIENC_RUNNING_STATE) 
             {
-                fcgi_kill(proc, SIGTERM);
+                fcgienc_kill(proc, SIGTERM);
             }
         }
-
+        
         s = s->next;
     }
-
-#ifndef WIN32
-    
-    s = fcgi_servers;
-    while (s) 
-    {
-    	if (s->socket_path != NULL && s->directive != APP_CLASS_EXTERNAL) 
-    	{
-    	    struct timeval tv;
-    	    
-    	    /* sleep two seconds to let the children terminate themselves */
-    	    tv.tv_sec = 2;
-    	    tv.tv_usec = 0;
-    	    ap_select(0, NULL, NULL, NULL, &tv);
-    	    
-    	    while (s) 
-    	    {
-    	        if (s->socket_path != NULL && s->directive != APP_CLASS_EXTERNAL) 
-    	        {
-    	            /* Remove the socket file */
-    	            if (unlink(s->socket_path) != 0 && errno != ENOENT) {
-    	                log_message(ENCRYPT_LOG_ERR,
-    	                    "FastCGIENC: unlink() failed to remove socket file \"%s\" for%s server \"%s\"",
-    	                    s->socket_path,
-    	                    (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "", s->fs_path);
-    	            }
-    	        }
-    	        
-    	        s = s->next;
-    	    }
-    	    
-    	    break;
-    	}
-    	
-    	s = s->next;
-    }
-    
-#endif
 
 #if defined(WIN32) && (WIN32_SHUTDOWN_GRACEFUL_WAIT > 0)
 
@@ -188,7 +162,7 @@ static void shutdown_all()
      */
     
     Sleep(WIN32_SHUTDOWN_GRACEFUL_WAIT);
-    s = fcgi_servers;
+    s = fcgienc_servers;
 
     while (s) 
     {
@@ -201,9 +175,9 @@ static void shutdown_all()
         /* Send KILL to all processes */
         for (i = 0; i < numChildren; i++, proc++) 
         {
-            if (proc->state == FCGI_RUNNING_STATE) 
+            if (proc->state == FCGIENC_RUNNING_STATE) 
             {
-                fcgi_kill(proc, SIGKILL);
+                fcgienc_kill(proc, SIGKILL);
             }
         }
         
@@ -213,7 +187,7 @@ static void shutdown_all()
 #endif /* WIN32 */
 }
 
-static int init_listen_sock(fcgi_server * fs)
+static int init_listen_sock(fcgienc_server * fs)
 {
     ap_assert(fs->directive != APP_CLASS_EXTERNAL);
 
@@ -223,7 +197,7 @@ static int init_listen_sock(fcgi_server * fs)
 #ifdef WIN32
         errno = WSAGetLastError();  /* Not sure if this will work as expected */
 #endif
-        log_message(ENCRYPT_LOG_CRIT, 
+        ap_log_error(FCGIENC_LOG_CRIT_ERRNO, fcgienc_apache_main_server,
             "FastCGIENC: can't create %sserver \"%s\": socket() failed", 
             (fs->directive == APP_CLASS_DYNAMIC) ? "(dynamic) " : "",
             fs->fs_path);
@@ -254,7 +228,7 @@ static int init_listen_sock(fcgi_server * fs)
         ap_snprintf(port, sizeof(port), "port=%d", 
             ((struct sockaddr_in *)fs->socket_addr)->sin_port);
 
-        log_message(ENCRYPT_LOG_CRIT,
+        ap_log_error(FCGIENC_LOG_CRIT_ERRNO, fcgienc_apache_main_server,
             "FastCGIENC: can't create %sserver \"%s\": bind() failed [%s]", 
             (fs->directive == APP_CLASS_DYNAMIC) ? "(dynamic) " : "",
             fs->fs_path,
@@ -270,7 +244,7 @@ static int init_listen_sock(fcgi_server * fs)
     else if (fs->socket_addr->sa_family == AF_UNIX
         && chmod(((struct sockaddr_un *)fs->socket_addr)->sun_path, S_IRUSR | S_IWUSR))
     {
-        log_message(ENCRYPT_LOG_CRIT,
+        ap_log_error(FCGIENC_LOG_CRIT, fcgienc_apache_main_server,
             "FastCGIENC: can't create %sserver \"%s\": chmod() of socket failed", 
             (fs->directive == APP_CLASS_DYNAMIC) ? "(dynamic) " : "",
             fs->fs_path);
@@ -283,7 +257,7 @@ static int init_listen_sock(fcgi_server * fs)
 #ifdef WIN32
         errno = WSAGetLastError();
 #endif
-        log_message(ENCRYPT_LOG_CRIT,
+        ap_log_error(FCGIENC_LOG_CRIT_ERRNO, fcgienc_apache_main_server,
             "FastCGIENC: can't create %sserver \"%s\": listen() failed", 
             (fs->directive == APP_CLASS_DYNAMIC) ? "(dynamic) " : "",
             fs->fs_path);
@@ -318,7 +292,7 @@ static int init_listen_sock(fcgi_server * fs)
  *          processes before exiting.
  *
  * Inputs:
- *      Uses global variable fcgi_servers.
+ *      Uses global variable fcgienc_servers.
  *
  * Results:
  *      Does not return.
@@ -371,7 +345,7 @@ static void signal_handler(int signo)
  *
  *----------------------------------------------------------------------
  */
-static pid_t spawn_fs_process(fcgi_server *fs, ServerProcess *process)
+static pid_t spawn_fs_process(fcgienc_server *fs, ServerProcess *process)
 {
 #ifndef WIN32
 
@@ -391,7 +365,7 @@ static pid_t spawn_fs_process(fcgi_server *fs, ServerProcess *process)
     if (dnEnd == NULL) {
         dirName = "./";
     } else {
-        dirName = ap_pcalloc(fcgi_config_pool, dnEnd - fs->fs_path + 1);
+        dirName = ap_pcalloc(fcgienc_config_pool, dnEnd - fs->fs_path + 1);
         dirName = memcpy(dirName, fs->fs_path, dnEnd - fs->fs_path);
     }
     if (chdir(dirName) < 0) {
@@ -410,18 +384,18 @@ static pid_t spawn_fs_process(fcgi_server *fs, ServerProcess *process)
 #endif
 
     /* Open the listenFd on spec'd fd */
-    if (fs->listenFd != FCGI_LISTENSOCK_FILENO)
-        dup2(fs->listenFd, FCGI_LISTENSOCK_FILENO);
+    if (fs->listenFd != FCGIENC_LISTENSOCK_FILENO)
+        dup2(fs->listenFd, FCGIENC_LISTENSOCK_FILENO);
 
     /* Close all other open fds, except stdout/stderr.  Leave these two open so
      * FastCGIENC applications don't have to find and fix ALL 3rd party libs that
      * write to stdout/stderr inadvertantly.  For now, just leave 'em open to the
      * main server error_log - @@@ provide a directive control where this goes.
      */
-    ap_error_log2stderr(fcgi_apache_main_server);
+    ap_error_log2stderr(fcgienc_apache_main_server);
     dup2(2, 1);
-    for (i = 0; i < FCGI_MAX_FD; i++) {
-        if (i != FCGI_LISTENSOCK_FILENO && i != 2 && i != 1) {
+    for (i = 0; i < FCGIENC_MAX_FD; i++) {
+        if (i != FCGIENC_LISTENSOCK_FILENO && i != 2 && i != 1) {
             close(i);
         }
     }
@@ -430,7 +404,7 @@ static pid_t spawn_fs_process(fcgi_server *fs, ServerProcess *process)
      * install its own handler. */
     signal(SIGPIPE, SIG_IGN);
 
-    if (fcgi_wrapper)
+    if (fcgienc_wrapper)
     {
         char *shortName;
 
@@ -449,9 +423,9 @@ static pid_t spawn_fs_process(fcgi_server *fs, ServerProcess *process)
 
         /* AP13 does not use suexec if the target uid/gid is the same as the 
          * server's - AP20 does.  I (now) consider the AP2 approach better
-         * (fcgi_pm.c v1.42 incorporated the 1.3 behaviour, v1.84 reverted it,
+         * (fcgienc_pm.c v1.42 incorporated the 1.3 behaviour, v1.84 reverted it,
          * v1.85 added the compile time option to use the old behaviour). */
-        if (fcgi_user_id == fs->uid && fcgi_group_id == fs->gid) {
+        if (fcgienc_user_id == fs->uid && fcgienc_group_id == fs->gid) {
             goto NO_SUEXEC;
         }
 
@@ -459,7 +433,7 @@ static pid_t spawn_fs_process(fcgi_server *fs, ServerProcess *process)
         shortName = strrchr(fs->fs_path, '/') + 1;
 
         do {
-            execle(fcgi_wrapper, fcgi_wrapper, fs->username, fs->group,
+            execle(fcgienc_wrapper, fcgienc_wrapper, fs->username, fs->group,
                    shortName, NULL, fs->envp);
         } while (errno == EINTR);
     }
@@ -504,13 +478,13 @@ FailedSystemCallExit:
     cgi_build_command = APR_RETRIEVE_OPTIONAL_FN(ap_cgi_build_command);
     if (cgi_build_command == NULL) 
     {
-        log_message(ENCRYPT_LOG_CRIT,
+        ap_log_error(FCGIENC_LOG_CRIT, fcgienc_apache_main_server,
             "FastCGIENC: can't exec server \"%s\", mod_cgi isn't loaded", 
             fs->fs_path);
         return 0;
     }
 
-    if (apr_pool_create(&tp, fcgi_config_pool))
+    if (apr_pool_create(&tp, fcgienc_config_pool))
         return 0;
 
     process->terminationEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
@@ -520,7 +494,7 @@ FailedSystemCallExit:
     SetHandleInformation(process->terminationEvent, HANDLE_FLAG_INHERIT, TRUE);
     
     termination_env_string = ap_psprintf(tp, 
-        "_FCGI_SHUTDOWN_EVENT_=%ld", process->terminationEvent);
+        "_FCGIENC_SHUTDOWN_EVENT_=%ld", process->terminationEvent);
 
     while (fs->envp[i]) i++;
     fs->envp[i++] = termination_env_string;
@@ -542,7 +516,7 @@ FailedSystemCallExit:
 
         if (listen_handle == INVALID_HANDLE_VALUE) 
         {
-            log_message(ENCRYPT_LOG_CRIT,
+            ap_log_error(FCGIENC_LOG_CRIT, fcgienc_apache_main_server,
                 "FastCGIENC: can't exec server \"%s\", CreateNamedPipe() failed", 
                 fs->fs_path);
             goto CLEANUP;
@@ -553,8 +527,8 @@ FailedSystemCallExit:
         listen_handle = (HANDLE) fs->listenFd;
     }
 
-    r.per_dir_config = fcgi_apache_main_server->lookup_defaults;
-    r.server = fcgi_apache_main_server;
+    r.per_dir_config = fcgienc_apache_main_server->lookup_defaults;
+    r.server = fcgienc_apache_main_server;
     r.filename = (char *) fs->fs_path;
     r.pool = tp;
     r.subprocess_env = apr_table_make(tp, 0);
@@ -564,7 +538,7 @@ FailedSystemCallExit:
     rv = cgi_build_command(&command, &argv, &r, tp, &e_info);
     if (rv != APR_SUCCESS) 
     {
-        log_message(ENCRYPT_LOG_CRIT,
+        ap_log_error(FCGIENC_LOG_CRIT, fcgienc_apache_main_server,
             "FastCGIENC: don't know how to spawn cmd child process: %s", 
             fs->fs_path);
         goto CLEANUP;
@@ -585,11 +559,6 @@ FailedSystemCallExit:
     if (apr_os_file_put(&file, &listen_handle, 0, tp))
         goto CLEANUP;
 
-#if (APR_MAJOR_VERSION >= 1) && (APR_MINOR_VERSION >= 3)
-    if (apr_procattr_io_set(procattr, APR_FULL_BLOCK, APR_NO_FILE, APR_NO_FILE))
-        goto CLEANUP;
-#endif    
-    
     /* procattr is opaque so we have to use this - unfortuantely it dups */
     if (apr_procattr_child_in_set(procattr, file, NULL))
         goto CLEANUP; 
@@ -634,7 +603,7 @@ CLEANUP:
     request_rec r;
     pid_t pid = -1;
 
-    pool * tp = ap_make_sub_pool(fcgi_config_pool);
+    pool * tp = ap_make_sub_pool(fcgienc_config_pool);
 
     HANDLE listen_handle = INVALID_HANDLE_VALUE;
     char * termination_env_string = NULL;
@@ -642,7 +611,7 @@ CLEANUP:
     process->terminationEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
     if (process->terminationEvent == NULL)
     {
-        log_message(ENCRYPT_LOG_CRIT,
+        ap_log_error(FCGIENC_LOG_CRIT, fcgienc_apache_main_server,
             "FastCGIENC: can't create termination event for server \"%s\", "
             "CreateEvent() failed", fs->fs_path);
         goto CLEANUP;
@@ -650,7 +619,7 @@ CLEANUP:
     SetHandleInformation(process->terminationEvent, HANDLE_FLAG_INHERIT, TRUE);
     
     termination_env_string = ap_psprintf(tp, 
-        "_FCGI_SHUTDOWN_EVENT_=%ld", process->terminationEvent);
+        "_FCGIENC_SHUTDOWN_EVENT_=%ld", process->terminationEvent);
     
     if (fs->socket_path) 
     {
@@ -667,7 +636,7 @@ CLEANUP:
 
         if (listen_handle == INVALID_HANDLE_VALUE) 
         {
-            log_message(ENCRYPT_LOG_CRIT,
+            ap_log_error(FCGIENC_LOG_CRIT, fcgienc_apache_main_server,
                 "FastCGIENC: can't exec server \"%s\", CreateNamedPipe() failed", fs->fs_path);
             goto CLEANUP;
         }
@@ -682,15 +651,15 @@ CLEANUP:
     memset(&r,  0, sizeof(r));
 
     /* Can up a fake request to pass to ap_get_win32_interpreter() */
-    r.per_dir_config = fcgi_apache_main_server->lookup_defaults;
-    r.server = fcgi_apache_main_server;
+    r.per_dir_config = fcgienc_apache_main_server->lookup_defaults;
+    r.server = fcgienc_apache_main_server;
     r.filename = (char *) fs->fs_path;
     r.pool = tp;
 
     fileType = ap_get_win32_interpreter(&r, &interpreter);
 
     if (fileType == eFileTypeUNKNOWN) {
-        log_message(ENCRYPT_LOG_ERR,
+        ap_log_error(FCGIENC_LOG_ERR_NOERRNO, fcgienc_apache_main_server,
             "FastCGIENC: %s is not executable; ensure interpreted scripts have "
             "\"#!\" as their first line", 
             fs->fs_path);
@@ -802,7 +771,7 @@ static void reduce_privileges(void)
         struct passwd *ent = getpwuid(uid);
 
         if (ent == NULL) {
-            log_message(ENCRYPT_LOG_ALERT,
+            ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server,
                 "FastCGIENC: process manager exiting, getpwuid(%u) couldn't determine user name, "
                 "you probably need to modify the User directive", (unsigned)uid);
             exit(1);
@@ -814,7 +783,7 @@ static void reduce_privileges(void)
 
     /* Change Group */
     if (setgid(ap_group_id) == -1) {
-        log_message(ENCRYPT_LOG_ALERT,
+        ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server,
             "FastCGIENC: process manager exiting, setgid(%u) failed", (unsigned)ap_group_id);
         exit(1);
     }
@@ -823,7 +792,7 @@ static void reduce_privileges(void)
 
     /* Initialize supplementary groups */
     if (initgroups(name, ap_group_id) == -1) {
-        log_message(ENCRYPT_LOG_ALERT,
+        ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server,
             "FastCGIENC: process manager exiting, initgroups(%s,%u) failed",
             name, (unsigned)ap_group_id);
         exit(1);
@@ -831,16 +800,16 @@ static void reduce_privileges(void)
 #endif /* __EMX__ */
 
     /* Change User */
-    if (fcgi_wrapper) {
+    if (fcgienc_wrapper) {
         if (seteuid_user() == -1) {
-            log_message(ENCRYPT_LOG_ALERT,
+            ap_log_error(FCGIENC_LOG_ALERT_NOERRNO, fcgienc_apache_main_server,
                 "FastCGIENC: process manager exiting, failed to reduce privileges");
             exit(1);
         }
     }
     else {
         if (setuid(ap_user_id) == -1) {
-            log_message(ENCRYPT_LOG_ALERT,
+            ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server,
                 "FastCGIENC: process manager exiting, setuid(%u) failed", (unsigned)ap_user_id);
             exit(1);
         }
@@ -857,7 +826,7 @@ static void change_process_name(const char * const name)
 }
 #endif /* !WIN32 */
 
-static void schedule_start(fcgi_server *s, int proc)
+static void schedule_start(fcgienc_server *s, int proc)
 {
     /* If we've started one recently, don't register another */
     time_t time_passed = now - s->restartTime;
@@ -870,9 +839,9 @@ static void schedule_start(fcgi_server *s, int proc)
     }
 
     FCGIDBG3("scheduling_start: %s (%d)", s->fs_path, proc);
-    s->procs[proc].state = FCGI_START_STATE;
+    s->procs[proc].state = FCGIENC_START_STATE;
     if (proc == dynamicMaxClassProcs - 1) {
-        log_message(ENCRYPT_LOG_WARN,
+        ap_log_error(FCGIENC_LOG_WARN_NOERRNO, fcgienc_apache_main_server,
             "FastCGIENC: scheduled the %sstart of the last (dynamic) server "
             "\"%s\" process: reached dynamicMaxClassProcs (%d)",
             s->procs[proc].pid ? "re" : "", s->fs_path, dynamicMaxClassProcs);
@@ -892,20 +861,20 @@ static void schedule_start(fcgi_server *s, int proc)
 
 static void dynamic_read_msgs(int read_ready)
 {
-    fcgi_server *s;
+    fcgienc_server *s;
     int rc;
 
 #ifndef WIN32
     static int buflen = 0;
-    static char buf[FCGI_MSGS_BUFSIZE + 1];
+    static char buf[FCGIENC_MSGS_BUFSIZE + 1];
     char *ptr1, *ptr2, opcode;
-    char execName[FCGI_MAXPATH + 1];
+    char execName[FCGIENC_MAXPATH + 1];
     char user[MAX_USER_NAME_LEN + 2];
     char group[MAX_GID_CHAR_LEN + 1];
     unsigned long q_usec = 0UL, req_usec = 0UL;
 #else
-    fcgi_pm_job *joblist = NULL;
-    fcgi_pm_job *cjob = NULL;
+    fcgienc_pm_job *joblist = NULL;
+    fcgienc_pm_job *cjob = NULL;
 #endif
 
     pool *sp = NULL, *tp;
@@ -917,14 +886,14 @@ static void dynamic_read_msgs(int read_ready)
     /*
      * To prevent the idle application from running indefinitely, we
      * check the timer and if it is expired, we recompute the values
-     * for each running application class.  Then, when FCGI_REQUEST_COMPLETE_JOB
+     * for each running application class.  Then, when FCGIENC_REQUEST_COMPLETE_JOB
      * message is received, only updates are made to the data structures.
      */
-    if (fcgi_dynamic_last_analyzed == 0) {
-        fcgi_dynamic_last_analyzed = now;
+    if (fcgienc_dynamic_last_analyzed == 0) {
+        fcgienc_dynamic_last_analyzed = now;
     }
-    if ((now - fcgi_dynamic_last_analyzed) >= (int)dynamicUpdateInterval) {
-        for (s = fcgi_servers; s != NULL; s = s->next) {
+    if ((now - fcgienc_dynamic_last_analyzed) >= (int)dynamicUpdateInterval) {
+        for (s = fcgienc_servers; s != NULL; s = s->next) {
             if (s->directive != APP_CLASS_DYNAMIC)
                 break;
 
@@ -932,7 +901,7 @@ static void dynamic_read_msgs(int read_ready)
              * it was last set. Round the increase down to the nearest
              * multiple of dynamicUpdateInterval */
 
-            fcgi_dynamic_last_analyzed += (((long)(now-fcgi_dynamic_last_analyzed)/dynamicUpdateInterval)*dynamicUpdateInterval);
+            fcgienc_dynamic_last_analyzed += (((long)(now-fcgienc_dynamic_last_analyzed)/dynamicUpdateInterval)*dynamicUpdateInterval);
             s->smoothConnTime = (unsigned long) ((1.0-dynamicGain)*s->smoothConnTime + dynamicGain*s->totalConnTime);
             s->totalConnTime = 0UL;
             s->totalQueueTime = 0UL;
@@ -944,13 +913,13 @@ static void dynamic_read_msgs(int read_ready)
     }
     
 #ifndef WIN32
-    rc = read(fcgi_pm_pipe[0], (void *)(buf + buflen), FCGI_MSGS_BUFSIZE - buflen);
+    rc = read(fcgienc_pm_pipe[0], (void *)(buf + buflen), FCGIENC_MSGS_BUFSIZE - buflen);
     if (rc <= 0) {
         if (!caughtSigTerm) {
-            log_message(ENCRYPT_LOG_ALERT, 
+            ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server, 
                 "FastCGIENC: read() from pipe failed (%d)", rc);
             if (rc == 0) {
-                log_message(ENCRYPT_LOG_ALERT, 
+                ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server, 
                     "FastCGIENC: the PM is shutting down, Apache seems to have disappeared - bye");
                 caughtSigTerm = TRUE;
             }
@@ -967,21 +936,21 @@ static void dynamic_read_msgs(int read_ready)
      * There really should be no reason why this wait would get stuck
      * but there's no point in waiting forever. */
 
-    rc = WaitForSingleObject(fcgi_dynamic_mbox_mutex, FCGI_MBOX_MUTEX_TIMEOUT);
+    rc = WaitForSingleObject(fcgienc_dynamic_mbox_mutex, FCGIENC_MBOX_MUTEX_TIMEOUT);
 
     if (rc != WAIT_OBJECT_0 && rc != WAIT_ABANDONED) 
     {
-        log_message(ENCRYPT_LOG_ALERT,
+        ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server,
             "FastCGIENC: failed to aquire the dynamic mbox mutex - something is broke?!");
         return;
     }
 
-    joblist = fcgi_dynamic_mbox;
-    fcgi_dynamic_mbox = NULL;
+    joblist = fcgienc_dynamic_mbox;
+    fcgienc_dynamic_mbox = NULL;
 
-    if (! ReleaseMutex(fcgi_dynamic_mbox_mutex)) 
+    if (! ReleaseMutex(fcgienc_dynamic_mbox_mutex)) 
     {
-        log_message(ENCRYPT_LOG_ALERT,
+        ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server,
             "FastCGIENC: failed to release the dynamic mbox mutex - something is broke?!");
     }
 
@@ -989,9 +958,9 @@ static void dynamic_read_msgs(int read_ready)
 #endif
 
 #ifdef APACHE2
-    apr_pool_create(&tp, fcgi_config_pool);
+    apr_pool_create(&tp, fcgienc_config_pool);
 #else
-    tp = ap_make_sub_pool(fcgi_config_pool);
+    tp = ap_make_sub_pool(fcgienc_config_pool);
 #endif
 
 #ifndef WIN32
@@ -1010,8 +979,8 @@ static void dynamic_read_msgs(int read_ready)
 
         switch (opcode) 
         {
-        case FCGI_SERVER_START_JOB:
-        case FCGI_SERVER_RESTART_JOB:
+        case FCGIENC_SERVER_START_JOB:
+        case FCGIENC_SERVER_RESTART_JOB:
 
             if (sscanf(ptr1, "%c %s %16s %15s",
                 &opcode, execName, user, group) != 4)
@@ -1020,7 +989,7 @@ static void dynamic_read_msgs(int read_ready)
             }
             break;
 
-        case FCGI_REQUEST_TIMEOUT_JOB:
+        case FCGIENC_REQUEST_TIMEOUT_JOB:
 
             if (sscanf(ptr1, "%c %s %16s %15s",
                 &opcode, execName, user, group) != 4)
@@ -1029,7 +998,7 @@ static void dynamic_read_msgs(int read_ready)
             }
             break;
 
-        case FCGI_REQUEST_COMPLETE_JOB:
+        case FCGIENC_REQUEST_COMPLETE_JOB:
 
             if (sscanf(ptr1, "%c %s %16s %15s %lu %lu",
                 &opcode, execName, user, group, &q_usec, &req_usec) != 6)
@@ -1047,7 +1016,7 @@ static void dynamic_read_msgs(int read_ready)
 	FCGIDBG7("read_job: %c %s %s %s %lu %lu", opcode, execName, user, group, q_usec, req_usec);
 
         if (scan_failed) {
-            log_message(ENCRYPT_LOG_ERR,
+            ap_log_error(FCGIENC_LOG_ERR_NOERRNO, fcgienc_apache_main_server,
                 "FastCGIENC: bogus message, sscanf() failed: \"%s\"", ptr1);
             goto NextJob;
         }
@@ -1059,15 +1028,15 @@ static void dynamic_read_msgs(int read_ready)
 #endif
 
 #ifndef WIN32
-        s = fcgi_util_fs_get(execName, user, group);
+        s = fcgienc_util_fs_get(execName, user, group);
 #else
-        s = fcgi_util_fs_get(cjob->fs_path, cjob->user, cjob->group);
+        s = fcgienc_util_fs_get(cjob->fs_path, cjob->user, cjob->group);
 #endif
 
 #ifndef WIN32
-        if (s==NULL && opcode != FCGI_REQUEST_COMPLETE_JOB)
+        if (s==NULL && opcode != FCGIENC_REQUEST_COMPLETE_JOB)
 #else
-        if (s==NULL && cjob->id != FCGI_REQUEST_COMPLETE_JOB)
+        if (s==NULL && cjob->id != FCGIENC_REQUEST_COMPLETE_JOB)
 #endif
         {
 #ifdef WIN32
@@ -1076,7 +1045,7 @@ static void dynamic_read_msgs(int read_ready)
 
             if (mutex == NULL)
             {
-                log_message(ENCRYPT_LOG_ALERT,
+                ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server,
                     "FastCGIENC: can't create accept mutex "
                     "for (dynamic) server \"%s\"", cjob->fs_path);
                 goto BagNewServer;
@@ -1090,13 +1059,13 @@ static void dynamic_read_msgs(int read_ready)
             /* Create a perm subpool to hold the new server data,
              * we can destroy it if something doesn't pan out */
 #ifdef APACHE2
-            apr_pool_create(&sp, fcgi_config_pool);
+            apr_pool_create(&sp, fcgienc_config_pool);
 #else
-            sp = ap_make_sub_pool(fcgi_config_pool);
+            sp = ap_make_sub_pool(fcgienc_config_pool);
 #endif
 
             /* Create a new "dynamic" server */
-            s = fcgi_util_fs_new(sp);
+            s = fcgienc_util_fs_new(sp);
 
             s->directive = APP_CLASS_DYNAMIC;
             s->restartDelay = dynamicRestartDelay;
@@ -1106,14 +1075,14 @@ static void dynamic_read_msgs(int read_ready)
             s->flush = dynamicFlush;
             
 #ifdef WIN32
-            s->mutex_env_string = ap_psprintf(sp, "_FCGI_MUTEX_=%ld", mutex);
+            s->mutex_env_string = ap_psprintf(sp, "_FCGIENC_MUTEX_=%ld", mutex);
             s->fs_path = ap_pstrdup(sp, cjob->fs_path);
 #else
             s->fs_path = ap_pstrdup(sp, execName);
 #endif
             ap_getparents(s->fs_path);
             ap_no2slash(s->fs_path);
-            s->procs = fcgi_util_fs_create_procs(sp, dynamicMaxClassProcs);
+            s->procs = fcgienc_util_fs_create_procs(sp, dynamicMaxClassProcs);
 
             /* XXX the socket_path (both Unix and Win) *is* deducible and
              * thus can and will be used by other apache instances without
@@ -1125,15 +1094,15 @@ static void dynamic_read_msgs(int read_ready)
 
 #ifndef WIN32
             /* Create socket file's path */
-            s->socket_path = fcgi_util_socket_hash_filename(tp, execName, user, group);
-            s->socket_path = fcgi_util_socket_make_path_absolute(sp, s->socket_path, 1);
+            s->socket_path = fcgienc_util_socket_hash_filename(tp, execName, user, group);
+            s->socket_path = fcgienc_util_socket_make_path_absolute(sp, s->socket_path, 1);
 
             /* Create sockaddr, prealloc it so it won't get created in tp */
             s->socket_addr = ap_pcalloc(sp, sizeof(struct sockaddr_un));
-            err = fcgi_util_socket_make_domain_addr(tp, (struct sockaddr_un **)&s->socket_addr,
+            err = fcgienc_util_socket_make_domain_addr(tp, (struct sockaddr_un **)&s->socket_addr,
                                           &s->socket_addr_len, s->socket_path);
             if (err) {
-                log_message(ENCRYPT_LOG_CRIT,
+                ap_log_error(FCGIENC_LOG_CRIT, fcgienc_apache_main_server,
                     "FastCGIENC: can't create (dynamic) server \"%s\": %s", execName, err);
                 goto BagNewServer;
             }
@@ -1143,13 +1112,13 @@ static void dynamic_read_msgs(int read_ready)
             }
 
             /* If a wrapper is being used, config user/group info */
-            if (fcgi_wrapper) {
+            if (fcgienc_wrapper) {
                 if (user[0] == '~') {
                     /* its a user dir uri, the rest is a username, not a uid */
                     struct passwd *pw = getpwnam(&user[1]);
 
                     if (!pw) {
-                        log_message(ENCRYPT_LOG_CRIT,
+                        ap_log_error(FCGIENC_LOG_CRIT, fcgienc_apache_main_server,
                             "FastCGIENC: can't create (dynamic) server \"%s\": can't get uid/gid for wrapper: getpwnam(%s) failed",
                             execName, &user[1]);
                         goto BagNewServer;
@@ -1167,7 +1136,7 @@ static void dynamic_read_msgs(int read_ready)
                     s->uid = (uid_t)atol(user);
                     pw = getpwuid(s->uid);
                     if (!pw) {
-                        log_message(ENCRYPT_LOG_CRIT,
+                        ap_log_error(FCGIENC_LOG_CRIT, fcgienc_apache_main_server,
                             "FastCGIENC: can't create (dynamic) server \"%s\": can't get uid/gid for wrapper: getwpuid(%ld) failed",
                             execName, (long)s->uid);
                         goto BagNewServer;
@@ -1181,18 +1150,18 @@ static void dynamic_read_msgs(int read_ready)
             }
 #else
             /* Create socket file's path */
-            s->socket_path = fcgi_util_socket_hash_filename(tp, cjob->fs_path, cjob->user, cjob->group);
-            s->socket_path = fcgi_util_socket_make_path_absolute(sp, s->socket_path, 1);
+            s->socket_path = fcgienc_util_socket_hash_filename(tp, cjob->fs_path, cjob->user, cjob->group);
+            s->socket_path = fcgienc_util_socket_make_path_absolute(sp, s->socket_path, 1);
             s->listenFd = 0;
 #endif
 
-            fcgi_util_fs_add(s);
+            fcgienc_util_fs_add(s);
         }
         else {
 #ifndef WIN32
-            if (opcode == FCGI_SERVER_RESTART_JOB) {
+            if (opcode == FCGIENC_SERVER_RESTART_JOB) {
 #else
-            if (cjob->id==FCGI_SERVER_RESTART_JOB) {
+            if (cjob->id==FCGIENC_SERVER_RESTART_JOB) {
 #endif
                 /* Check to see if the binary has changed.  If so,
                 * kill the FCGI application processes, and
@@ -1222,15 +1191,15 @@ static void dynamic_read_msgs(int read_ready)
                         if (s->procs[i].pid > 0 
                             && stbuf.st_mtime > s->procs[i].start_time) 
                         {
-                            fcgi_kill(&s->procs[i], SIGTERM);
+                            fcgienc_kill(&s->procs[i], SIGTERM);
                             do_restart++;
                         }
                     }
 
                     if (do_restart)
                     {
-                        log_message(ENCRYPT_LOG_WARN, 
-                            "FastCGIENC: restarting "
+                        ap_log_error(FCGIENC_LOG_WARN_NOERRNO, 
+                            fcgienc_apache_main_server, "FastCGIENC: restarting "
                             "old server \"%s\" processes, newer version "
                             "found", app_path);
                     }
@@ -1238,16 +1207,16 @@ static void dynamic_read_msgs(int read_ready)
 
                 /* If dynamicAutoRestart, don't mark any new processes
                  * for  starting because we probably got the
-                 * FCGI_SERVER_START_JOB due to dynamicAutoUpdate and the ProcMgr
+                 * FCGIENC_SERVER_START_JOB due to dynamicAutoUpdate and the ProcMgr
                  * will be restarting all of those we just killed.
                  */
                 if (dynamicAutoRestart)
                     goto NextJob;
             } 
 #ifndef WIN32
-            else if (opcode == FCGI_SERVER_START_JOB) {
+            else if (opcode == FCGIENC_SERVER_START_JOB) {
 #else
-            else if (cjob->id==FCGI_SERVER_START_JOB) {
+            else if (cjob->id==FCGIENC_SERVER_START_JOB) {
 #endif
                 /* we've been asked to start a process--only start
                 * it if we're not already running at least one
@@ -1256,7 +1225,7 @@ static void dynamic_read_msgs(int read_ready)
                 int i;
 
                 for (i = 0; i < dynamicMaxClassProcs; i++) {
-                   if (s->procs[i].state == FCGI_RUNNING_STATE)
+                   if (s->procs[i].state == FCGIENC_RUNNING_STATE)
                       break;
                 }
                 /* if already running, don't start another one */
@@ -1274,7 +1243,7 @@ static void dynamic_read_msgs(int read_ready)
         {
             int i, start;
 
-            case FCGI_SERVER_RESTART_JOB:
+            case FCGIENC_SERVER_RESTART_JOB:
 
                 start = FALSE;
                 
@@ -1282,13 +1251,13 @@ static void dynamic_read_msgs(int read_ready)
 
                 for (i = 0; i < dynamicMaxClassProcs; ++i)
                 {
-                    if (s->procs[i].state == FCGI_START_STATE
-                        || s->procs[i].state == FCGI_RUNNING_STATE)
+                    if (s->procs[i].state == FCGIENC_START_STATE
+                        || s->procs[i].state == FCGIENC_RUNNING_STATE)
                     {
                         break;
                     }
-                    else if (s->procs[i].state == FCGI_KILLED_STATE 
-                        || s->procs[i].state == FCGI_READY_STATE)
+                    else if (s->procs[i].state == FCGIENC_KILLED_STATE 
+                        || s->procs[i].state == FCGIENC_READY_STATE)
                     {
                         start = TRUE;
                         break;
@@ -1309,16 +1278,16 @@ static void dynamic_read_msgs(int read_ready)
                         
                 break;
 
-            case FCGI_SERVER_START_JOB:
-            case FCGI_REQUEST_TIMEOUT_JOB:
+            case FCGIENC_SERVER_START_JOB:
+            case FCGIENC_REQUEST_TIMEOUT_JOB:
 
-                if ((fcgi_dynamic_total_proc_count + 1) > (int) dynamicMaxProcs) {
+                if ((fcgienc_dynamic_total_proc_count + 1) > (int) dynamicMaxProcs) {
                     /*
                      * Extra instances should have been
                      * terminated beforehand, probably need
                      * to increase ProcessSlack parameter
                      */
-                    log_message(ENCRYPT_LOG_WARN,
+                    ap_log_error(FCGIENC_LOG_WARN_NOERRNO, fcgienc_apache_main_server,
                         "FastCGIENC: can't schedule the start of another (dynamic) server \"%s\" process: "
                         "exceeded dynamicMaxProcs (%d)", s->fs_path, dynamicMaxProcs);
                     goto NextJob;
@@ -1327,12 +1296,12 @@ static void dynamic_read_msgs(int read_ready)
                 /* find next free slot */
                 for (i = 0; i < dynamicMaxClassProcs; i++) 
                 {
-                    if (s->procs[i].state == FCGI_START_STATE) 
+                    if (s->procs[i].state == FCGIENC_START_STATE) 
                     {
                         FCGIDBG2("ignore_job: slot (%d) is already scheduled for starting", i);
                         break;
                     }
-                    else if (s->procs[i].state == FCGI_RUNNING_STATE)
+                    else if (s->procs[i].state == FCGIENC_RUNNING_STATE)
                     {
                         continue;
                     }
@@ -1341,13 +1310,13 @@ static void dynamic_read_msgs(int read_ready)
                     break;
                 }
 
-#ifdef FCGI_DEBUG
+#ifdef FCGIENC_DEBUG
                 if (i >= dynamicMaxClassProcs) {
                     FCGIDBG1("ignore_job: slots are max'd");
                 }
 #endif
                 break;
-            case FCGI_REQUEST_COMPLETE_JOB:
+            case FCGIENC_REQUEST_COMPLETE_JOB:
                 /* only record stats if we have a structure */
                 if (s) {
 #ifndef WIN32
@@ -1386,7 +1355,7 @@ BagNewServer:
 
 #ifndef WIN32
     if (ptr1 == buf) {
-        log_message(ENCRYPT_LOG_ERR,
+        ap_log_error(FCGIENC_LOG_ERR_NOERRNO, fcgienc_apache_main_server,
             "FastCGIENC: really bogus message: \"%s\"", ptr1);
         ptr1 += strlen(buf);
     }
@@ -1415,10 +1384,10 @@ BagNewServer:
  */
 static void dynamic_kill_idle_fs_procs(void)
 {
-    fcgi_server *s;
+    fcgienc_server *s;
     int victims = 0;
 
-    for (s = fcgi_servers;  s != NULL; s = s->next) 
+    for (s = fcgienc_servers;  s != NULL; s = s->next) 
     {
         /* 
          * server's smoothed running time, or if that's 0, the current total 
@@ -1447,11 +1416,11 @@ static void dynamic_kill_idle_fs_procs(void)
         /* s->numProcesses includes pending kills so get the "active" count */
         for (i = 0; i < dynamicMaxClassProcs; ++i)
         {
-            if (s->procs[i].state == FCGI_RUNNING_STATE) ++really_running;
+            if (s->procs[i].state == FCGIENC_RUNNING_STATE) ++really_running;
         }
                 
         connTime = s->smoothConnTime ? s->smoothConnTime : s->totalConnTime;
-        totalTime = really_running * (now - fcgi_dynamic_epoch) * 1000000 + 1;
+        totalTime = really_running * (now - fcgienc_dynamic_epoch) * 1000000 + 1;
 
         loadFactor = 100 * connTime / totalTime;
 
@@ -1477,12 +1446,12 @@ static void dynamic_kill_idle_fs_procs(void)
          */
         for (i = 0; i < dynamicMaxClassProcs; ++i) 
         {
-            if (s->procs[i].state == FCGI_START_STATE) 
+            if (s->procs[i].state == FCGIENC_START_STATE) 
             {
-                s->procs[i].state = FCGI_READY_STATE;
+                s->procs[i].state = FCGIENC_READY_STATE;
                 break;
             }
-            else if (s->procs[i].state == FCGI_VICTIM_STATE) 
+            else if (s->procs[i].state == FCGIENC_VICTIM_STATE) 
             {
                 break;
             }
@@ -1495,7 +1464,7 @@ static void dynamic_kill_idle_fs_procs(void)
 
             for (i = 0; i < dynamicMaxClassProcs; ++i) 
             {
-                if (procs[i].state == FCGI_RUNNING_STATE) 
+                if (procs[i].state == FCGIENC_RUNNING_STATE) 
                 {
                     if (youngest == -1 || procs[i].start_time >= procs[youngest].start_time)
                     {
@@ -1506,11 +1475,11 @@ static void dynamic_kill_idle_fs_procs(void)
 
             if (youngest != -1)
             {
-                log_message(ENCRYPT_LOG_WARN,
+                ap_log_error(FCGIENC_LOG_WARN_NOERRNO, fcgienc_apache_main_server,
                     "FastCGIENC: (dynamic) server \"%s\" (pid %ld) termination signaled",
                     s->fs_path, (long) s->procs[youngest].pid);
 
-                fcgi_kill(&s->procs[youngest], SIGTERM);
+                fcgienc_kill(&s->procs[youngest], SIGTERM);
                 
                 victims++;
             }
@@ -1520,7 +1489,7 @@ static void dynamic_kill_idle_fs_procs(void)
              * the minimum that may be running without being killed off,
              * don't select any more victims. 
              */
-            if (fcgi_dynamic_total_proc_count - victims <= dynamicMinProcs) 
+            if (fcgienc_dynamic_total_proc_count - victims <= dynamicMinProcs) 
             {
                 break;
             }
@@ -1532,10 +1501,10 @@ static void dynamic_kill_idle_fs_procs(void)
 
 /* This is a little bogus, there's gotta be a better way to do this
  * Can we use WaitForMultipleObjects() */
-#define FCGI_PROC_WAIT_TIME 100
+#define FCGIENC_PROC_WAIT_TIME 100
 
 void child_wait_thread_main(void *dummy) {
-    fcgi_server *s;
+    fcgienc_server *s;
     DWORD dwRet = WAIT_TIMEOUT;
     int numChildren;
     int i;
@@ -1544,7 +1513,7 @@ void child_wait_thread_main(void *dummy) {
     while (!bTimeToDie) {
         waited = 0;
 
-        for (s = fcgi_servers; s != NULL; s = s->next) {
+        for (s = fcgienc_servers; s != NULL; s = s->next) {
             if (s->directive == APP_CLASS_EXTERNAL || s->listenFd < 0) {
                 continue;
             }
@@ -1562,7 +1531,7 @@ void child_wait_thread_main(void *dummy) {
 
                     /* timeout is currently set for 100 miliecond */ 
                     /* it may need to be longer or user customizable */
-                    dwRet = WaitForSingleObject(s->procs[i].handle, FCGI_PROC_WAIT_TIME);
+                    dwRet = WaitForSingleObject(s->procs[i].handle, FCGIENC_PROC_WAIT_TIME);
 
                     waited = 1;
 
@@ -1574,7 +1543,7 @@ void child_wait_thread_main(void *dummy) {
 
                         if (s->directive == APP_CLASS_STANDARD) {
                             /* restart static app */
-                            s->procs[i].state = FCGI_START_STATE;
+                            s->procs[i].state = FCGIENC_START_STATE;
                             if (exitStatus != 0) {
                                 /* don't bump failure count on exit 0 */
                                 s->numFailures++;
@@ -1582,11 +1551,11 @@ void child_wait_thread_main(void *dummy) {
                         }
                         else {
                             s->numProcesses--;
-                            fcgi_dynamic_total_proc_count--;
-                            FCGIDBG2("-- fcgi_dynamic_total_proc_count=%d", fcgi_dynamic_total_proc_count);
+                            fcgienc_dynamic_total_proc_count--;
+                            FCGIDBG2("-- fcgienc_dynamic_total_proc_count=%d", fcgienc_dynamic_total_proc_count);
 
-                            if (s->procs[i].state == FCGI_VICTIM_STATE) {
-                                s->procs[i].state = FCGI_KILLED_STATE;
+                            if (s->procs[i].state == FCGIENC_VICTIM_STATE) {
+                                s->procs[i].state = FCGIENC_KILLED_STATE;
                             }
                             else {
                                 /* dynamic app shouldn't have died or dynamicAutoUpdate killed it*/
@@ -1596,15 +1565,15 @@ void child_wait_thread_main(void *dummy) {
                                 }
 
                                 if (dynamicAutoRestart || (s->numProcesses <= 0 && dynamicThreshold1 == 0)) {
-                                    s->procs[i].state = FCGI_START_STATE;
+                                    s->procs[i].state = FCGIENC_START_STATE;
                                 }
                                 else {
-                                    s->procs[i].state = FCGI_READY_STATE;
+                                    s->procs[i].state = FCGIENC_READY_STATE;
                                 }
                             }
                         }
 
-                        log_message(ENCRYPT_LOG_WARN,
+                        ap_log_error(FCGIENC_LOG_WARN_NOERRNO, fcgienc_apache_main_server,
                             "FastCGIENC:%s server \"%s\" (pid %d) terminated with exit with status '%d'",
                             (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
                             s->fs_path, (long) s->procs[i].pid, exitStatus);
@@ -1616,12 +1585,12 @@ void child_wait_thread_main(void *dummy) {
                         s->procs[i].pid = -1;
 
                         /* wake up the main thread */
-                        SetEvent(fcgi_event_handles[WAKE_EVENT]);
+                        SetEvent(fcgienc_event_handles[WAKE_EVENT]);
                     }
                 }
             }
         }
-        Sleep(waited ? 0 : FCGI_PROC_WAIT_TIME);
+        Sleep(waited ? 0 : FCGIENC_PROC_WAIT_TIME);
     }
 }
 #endif
@@ -1638,38 +1607,38 @@ static void setup_signals(void)
     sa.sa_flags = 0;
 
     if (sigaction(SIGTERM, &sa, NULL) < 0) {
-        log_message(ENCRYPT_LOG_ALERT,
+        ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server,
         "sigaction(SIGTERM) failed");
     }
     /* httpd restart */
     if (sigaction(SIGHUP, &sa, NULL) < 0) {
-        log_message(ENCRYPT_LOG_ALERT,
+        ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server,
         "sigaction(SIGHUP) failed");
     }
     /* httpd graceful restart */
     if (sigaction(SIGUSR1, &sa, NULL) < 0) {
-        log_message(ENCRYPT_LOG_ALERT,
+        ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server,
         "sigaction(SIGUSR1) failed");
     }
     /* read messages from request handlers - kill interval expired */
     if (sigaction(SIGALRM, &sa, NULL) < 0) {
-        log_message(ENCRYPT_LOG_ALERT,
+        ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server,
         "sigaction(SIGALRM) failed");
     }
     if (sigaction(SIGCHLD, &sa, NULL) < 0) {
-        log_message(ENCRYPT_LOG_ALERT,
+        ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server,
         "sigaction(SIGCHLD) failed");
     }
 }
 #endif
 
 #if !defined(WIN32) && !defined(APACHE2)
-int fcgi_pm_main(void *dummy, child_info *info)
+int fcgienc_pm_main(void *dummy, child_info *info)
 #else
-void fcgi_pm_main(void *dummy)
+void fcgienc_pm_main(void *dummy)
 #endif
 {
-    fcgi_server *s;
+    fcgienc_server *s;
     unsigned int i;
     int read_ready = 0;
     int alarmLeft = 0;
@@ -1687,24 +1656,24 @@ void fcgi_pm_main(void *dummy)
     for (i = 0; *envp; ++i) {
         ++envp;
     }
-    fcgi_config_set_env_var(fcgi_config_pool, dynamicEnvp, &i, "SystemRoot");
+    fcgienc_config_set_env_var(fcgienc_config_pool, dynamicEnvp, &i, "SystemRoot");
 
 #else
 
     reduce_privileges();
     change_process_name("fcgi-pm");
 
-    close(fcgi_pm_pipe[1]);
+    close(fcgienc_pm_pipe[1]);
     setup_signals();
 
-    if (fcgi_wrapper) {
-        log_message(ENCRYPT_LOG_NOTICE,
-            "FastCGIENC: wrapper mechanism enabled (wrapper: %s)", fcgi_wrapper);
+    if (fcgienc_wrapper) {
+        ap_log_error(FCGIENC_LOG_NOTICE_NOERRNO, fcgienc_apache_main_server,
+            "FastCGIENC: wrapper mechanism enabled (wrapper: %s)", fcgienc_wrapper);
     }
 #endif
 
     /* Initialize AppClass */
-    for (s = fcgi_servers; s != NULL; s = s->next) 
+    for (s = fcgienc_servers; s != NULL; s = s->next) 
     {
         if (s->directive != APP_CLASS_STANDARD)
             continue;
@@ -1715,7 +1684,7 @@ void fcgi_pm_main(void *dummy)
 #endif
 
         for (i = 0; i < s->numProcesses; ++i) 
-            s->procs[i].state = FCGI_START_STATE;
+            s->procs[i].state = FCGIENC_START_STATE;
     }
 
 #ifdef WIN32
@@ -1723,14 +1692,14 @@ void fcgi_pm_main(void *dummy)
 
     if (child_wait_thread == (HANDLE) -1)
     {
-        log_message(ENCRYPT_LOG_ALERT,
+        ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server,
             "FastCGIENC: failed to create process manager's wait thread!");
     }
 
-    log_message(ENCRYPT_LOG_NOTICE,
+    ap_log_error(FCGIENC_LOG_NOTICE_NOERRNO, fcgienc_apache_main_server,
         "FastCGIENC: process manager initialized");
 #else
-    log_message(ENCRYPT_LOG_NOTICE,
+    ap_log_error(FCGIENC_LOG_NOTICE_NOERRNO, fcgienc_apache_main_server,
         "FastCGIENC: process manager initialized (pid %ld)", (long) getpid());
 #endif
 
@@ -1749,7 +1718,6 @@ void fcgi_pm_main(void *dummy)
 #endif
         unsigned int numChildren;
 		unsigned int minServerLife;
-        unsigned int maxFailedStarts;
 
         /*
          * If we came out of sigsuspend() for any reason other than
@@ -1765,7 +1733,7 @@ void fcgi_pm_main(void *dummy)
          * remember that we do NOT need to restart externally managed
          * FastCGIENC applications.
          */
-        for (s = fcgi_servers; s != NULL; s = s->next) 
+        for (s = fcgienc_servers; s != NULL; s = s->next) 
         {
             if (s->directive == APP_CLASS_EXTERNAL)
                 continue;
@@ -1778,13 +1746,9 @@ void fcgi_pm_main(void *dummy)
                 ? dynamicMinServerLife 
                 : s->minServerLife;
 
-            maxFailedStarts = (s->directive == APP_CLASS_DYNAMIC) 
-                ? dynamicMaxFailedStarts
-                : s->minServerLife;
-
             for (i = 0; i < numChildren; ++i) 
             {
-                if (s->procs[i].pid <= 0 && s->procs[i].state == FCGI_START_STATE)
+                if (s->procs[i].pid <= 0 && s->procs[i].state == FCGIENC_START_STATE)
                 {
                     int restart = (s->procs[i].pid < 0);
                     time_t restartTime = s->restartTime;
@@ -1800,7 +1764,7 @@ void fcgi_pm_main(void *dummy)
                         s->procs[i].start_time = 0;
                     }
                     
-                    if (maxFailedStarts && s->numFailures > maxFailedStarts)
+                    if (s->numFailures > MAX_FAILED_STARTS)
                     {
                         time_t last_start_time = s->procs[i].start_time;
 
@@ -1808,7 +1772,7 @@ void fcgi_pm_main(void *dummy)
                         {
                             s->bad = 0;
                             s->numFailures = 0;
-                            log_message(ENCRYPT_LOG_WARN,
+                            ap_log_error(FCGIENC_LOG_WARN_NOERRNO, fcgienc_apache_main_server,
                                 "FastCGIENC:%s server \"%s\" has remained"
                                 " running for more than %d seconds, its restart"
                                 " interval has been restored to %d seconds",
@@ -1822,7 +1786,7 @@ void fcgi_pm_main(void *dummy)
                             for (j = 0; j < numChildren; ++j)
                             {
                                 if (s->procs[j].pid <= 0) continue;
-                                if (s->procs[j].state != FCGI_RUNNING_STATE) continue;
+                                if (s->procs[j].state != FCGIENC_RUNNING_STATE) continue;
                                 if (s->procs[j].start_time == 0) continue;
                                 if (now - s->procs[j].start_time > minServerLife) break;
                             }
@@ -1830,19 +1794,19 @@ void fcgi_pm_main(void *dummy)
                             if (j >= numChildren)
                             {
                                 s->bad = 1;
-                                log_message(ENCRYPT_LOG_WARN,
+                                ap_log_error(FCGIENC_LOG_WARN_NOERRNO, fcgienc_apache_main_server,
                                     "FastCGIENC:%s server \"%s\" has failed to remain"
                                     " running for %d seconds given %d attempts, its restart"
                                     " interval has been backed off to %d seconds",
                                     (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
-                                    s->fs_path, minServerLife, s->maxFailedStarts,
+                                    s->fs_path, minServerLife, MAX_FAILED_STARTS,
                                     FAILED_STARTS_DELAY);
                             }
                             else
                             {
                                 s->bad = 0;
                                 s->numFailures = 0;
-                                log_message(ENCRYPT_LOG_WARN,
+                                ap_log_error(FCGIENC_LOG_WARN_NOERRNO, fcgienc_apache_main_server,
                                     "FastCGIENC:%s server \"%s\" has remained"
                                     " running for more than %d seconds, its restart"
                                     " interval has been restored to %d seconds",
@@ -1866,7 +1830,7 @@ void fcgi_pm_main(void *dummy)
                         if (s->bad) 
                         {
                             s->bad = 0;
-                            s->numFailures = s->maxFailedStarts;
+                            s->numFailures = MAX_FAILED_STARTS;
                         }
 
                         if (s->listenFd < 0 && init_listen_sock(s)) 
@@ -1882,13 +1846,13 @@ void fcgi_pm_main(void *dummy)
 #endif
                         s->procs[i].pid = spawn_fs_process(s, &s->procs[i]);
                         if (s->procs[i].pid <= 0) {
-                            log_message(ENCRYPT_LOG_CRIT,
+                            ap_log_error(FCGIENC_LOG_CRIT, fcgienc_apache_main_server,
                                 "FastCGIENC: can't start%s server \"%s\": spawn_fs_process() failed",
                                 (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
                                 s->fs_path);
 
                             sleepSeconds = min(sleepSeconds,
-                                max((int) s->restartDelay, FCGI_MIN_EXEC_RETRY_DELAY));
+                                max((int) s->restartDelay, FCGIENC_MIN_EXEC_RETRY_DELAY));
 
                             s->procs[i].pid = -1;
                             break;
@@ -1903,21 +1867,21 @@ void fcgi_pm_main(void *dummy)
                         
                         if (s->directive == APP_CLASS_DYNAMIC) {
                             s->numProcesses++;
-                            fcgi_dynamic_total_proc_count++;
-                            FCGIDBG2("++ fcgi_dynamic_total_proc_count=%d", fcgi_dynamic_total_proc_count);
+                            fcgienc_dynamic_total_proc_count++;
+                            FCGIDBG2("++ fcgienc_dynamic_total_proc_count=%d", fcgienc_dynamic_total_proc_count);
                         }
 
-                        s->procs[i].state = FCGI_RUNNING_STATE;
+                        s->procs[i].state = FCGIENC_RUNNING_STATE;
 
-                        if (fcgi_wrapper) {
-                            log_message(ENCRYPT_LOG_WARN,
+                        if (fcgienc_wrapper) {
+                            ap_log_error(FCGIENC_LOG_WARN_NOERRNO, fcgienc_apache_main_server,
                                 "FastCGIENC:%s server \"%s\" (uid %ld, gid %ld) %sstarted (pid %ld)",
                                 (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
                                 s->fs_path, (long) s->uid, (long) s->gid,
                                 restart ? "re" : "", (long) s->procs[i].pid);
                         }
                         else {
-                            log_message(ENCRYPT_LOG_WARN,
+                            ap_log_error(FCGIENC_LOG_WARN_NOERRNO, fcgienc_apache_main_server,
                                 "FastCGIENC:%s server \"%s\" %sstarted (pid %ld)",
                                 (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
                                 s->fs_path, restart ? "re" : "", (long) s->procs[i].pid);
@@ -1941,8 +1905,8 @@ void fcgi_pm_main(void *dummy)
             alarm(sleepSeconds);
 
             FD_ZERO(&rfds);
-            FD_SET(fcgi_pm_pipe[0], &rfds);
-            read_ready = ap_select(fcgi_pm_pipe[0] + 1, &rfds, NULL, NULL, NULL);
+            FD_SET(fcgienc_pm_pipe[0], &rfds);
+            read_ready = ap_select(fcgienc_pm_pipe[0] + 1, &rfds, NULL, NULL, NULL);
 
             alarmLeft = alarm(0);
         }
@@ -1958,13 +1922,13 @@ void fcgi_pm_main(void *dummy)
          */
         if((callDynamicProcs) || (!callWaitPid)) {
             dynamic_read_msgs(read_ready);
-            if(fcgi_dynamic_epoch == 0) {
-                fcgi_dynamic_epoch = now;
+            if(fcgienc_dynamic_epoch == 0) {
+                fcgienc_dynamic_epoch = now;
             }
-            if(((long)(now-fcgi_dynamic_epoch)>=dynamicKillInterval) ||
-                    ((fcgi_dynamic_total_proc_count+dynamicProcessSlack)>=dynamicMaxProcs)) {
+            if(((long)(now-fcgienc_dynamic_epoch)>=dynamicKillInterval) ||
+                    ((fcgienc_dynamic_total_proc_count+dynamicProcessSlack)>=dynamicMaxProcs)) {
                 dynamic_kill_idle_fs_procs();
-                fcgi_dynamic_epoch = now;
+                fcgienc_dynamic_epoch = now;
             }
         }
 
@@ -1984,7 +1948,7 @@ void fcgi_pm_main(void *dummy)
             if (childPid == -1 || childPid == 0)
                 break;
 
-            for (s = fcgi_servers; s != NULL; s = s->next) {
+            for (s = fcgienc_servers; s != NULL; s = s->next) {
                 if (s->directive == APP_CLASS_EXTERNAL)
                     continue;
 
@@ -2007,7 +1971,7 @@ ChildFound:
 
             if (s->directive == APP_CLASS_STANDARD) {
                 /* Always restart static apps */
-                s->procs[i].state = FCGI_START_STATE;
+                s->procs[i].state = FCGIENC_START_STATE;
                 if (! (WIFEXITED(waitStatus) && (WEXITSTATUS(waitStatus) == 0))) {
                     /* don't bump the failure count if the app exited with 0 */
                     s->numFailures++;
@@ -2015,10 +1979,10 @@ ChildFound:
             }
             else {
                 s->numProcesses--;
-                fcgi_dynamic_total_proc_count--;
+                fcgienc_dynamic_total_proc_count--;
 
-                if (s->procs[i].state == FCGI_VICTIM_STATE) {
-                    s->procs[i].state = FCGI_KILLED_STATE;
+                if (s->procs[i].state == FCGIENC_VICTIM_STATE) {
+                    s->procs[i].state = FCGIENC_KILLED_STATE;
                 }
                 else {
                     /* A dynamic app died or exited without provocation from the PM */
@@ -2029,20 +1993,20 @@ ChildFound:
                     }
 
                     if (dynamicAutoRestart || (s->numProcesses <= 0 && dynamicThreshold1 == 0))
-                        s->procs[i].state = FCGI_START_STATE;
+                        s->procs[i].state = FCGIENC_START_STATE;
                     else
-                        s->procs[i].state = FCGI_READY_STATE;
+                        s->procs[i].state = FCGIENC_READY_STATE;
                 }
             }
 
             if (WIFEXITED(waitStatus)) {
-                log_message(ENCRYPT_LOG_WARN,
+                ap_log_error(FCGIENC_LOG_WARN_NOERRNO, fcgienc_apache_main_server,
                     "FastCGIENC:%s server \"%s\" (pid %ld) terminated by calling exit with status '%d'",
                     (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
                     s->fs_path, (long) childPid, WEXITSTATUS(waitStatus));
             }
             else if (WIFSIGNALED(waitStatus)) {
-                log_message(ENCRYPT_LOG_WARN,
+                ap_log_error(FCGIENC_LOG_WARN_NOERRNO, fcgienc_apache_main_server,
                     "FastCGIENC:%s server \"%s\" (pid %ld) terminated due to uncaught signal '%d' (%s)%s",
                     (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
                     s->fs_path, (long) childPid, WTERMSIG(waitStatus), get_signal_text(waitStatus),
@@ -2053,7 +2017,7 @@ ChildFound:
 #endif
             }
             else if (WIFSTOPPED(waitStatus)) {
-                log_message(ENCRYPT_LOG_WARN,
+                ap_log_error(FCGIENC_LOG_WARN_NOERRNO, fcgienc_apache_main_server,
                     "FastCGIENC:%s server \"%s\" (pid %ld) stopped due to uncaught signal '%d' (%s)",
                     (s->directive == APP_CLASS_DYNAMIC) ? " (dynamic)" : "",
                     s->fs_path, (long) childPid, WTERMSIG(waitStatus), get_signal_text(waitStatus));
@@ -2064,11 +2028,11 @@ ChildFound:
 
         /* wait for an event to occur or timer expires */
         expire = time(NULL) + sleepSeconds;
-        dwRet = WaitForMultipleObjects(3, (HANDLE *) fcgi_event_handles, FALSE, sleepSeconds * 1000);
+        dwRet = WaitForMultipleObjects(3, (HANDLE *) fcgienc_event_handles, FALSE, sleepSeconds * 1000);
 
         if (dwRet == WAIT_FAILED) {
             /* There is something seriously wrong here */
-            log_message(ENCRYPT_LOG_CRIT,
+            ap_log_error(FCGIENC_LOG_CRIT, fcgienc_apache_main_server,
                 "FastCGIENC: WaitForMultipleObjects() failed on event handles -- pm is shuting down");
                 bTimeToDie = TRUE;
         }
@@ -2092,14 +2056,14 @@ ChildFound:
 
             dynamic_read_msgs(read_ready);
 
-            if(fcgi_dynamic_epoch == 0) {
-                fcgi_dynamic_epoch = now;
+            if(fcgienc_dynamic_epoch == 0) {
+                fcgienc_dynamic_epoch = now;
             }
 
-            if ((now-fcgi_dynamic_epoch >= (int) dynamicKillInterval) ||
-               ((fcgi_dynamic_total_proc_count+dynamicProcessSlack) >= dynamicMaxProcs)) {
+            if ((now-fcgienc_dynamic_epoch >= (int) dynamicKillInterval) ||
+               ((fcgienc_dynamic_total_proc_count+dynamicProcessSlack) >= dynamicMaxProcs)) {
                 dynamic_kill_idle_fs_procs();
-                fcgi_dynamic_epoch = now;
+                fcgienc_dynamic_epoch = now;
             }
             read_ready = 0;
         }
@@ -2107,7 +2071,7 @@ ChildFound:
             continue;
         }
         else if (dwRet == TERM_EVENT) {
-            log_message(ENCRYPT_LOG_INFO, 
+            ap_log_error(FCGIENC_LOG_INFO_NOERRNO, fcgienc_apache_main_server, 
                 "FastCGIENC: Termination event received process manager shutting down");
             
             bTimeToDie = TRUE;
@@ -2117,7 +2081,7 @@ ChildFound:
         }
         else {
             /* Have an received an unknown event - should not happen */
-            log_message(ENCRYPT_LOG_CRIT,
+            ap_log_error(FCGIENC_LOG_CRIT, fcgienc_apache_main_server,
                 "FastCGIENC: WaitForMultipleobjects() return an unrecognized event");
             
             bTimeToDie = TRUE;
@@ -2144,23 +2108,23 @@ ProcessSigTerm:
 }
 
 #ifdef WIN32
-int fcgi_pm_add_job(fcgi_pm_job *new_job) 
+int fcgienc_pm_add_job(fcgienc_pm_job *new_job) 
 {
-    int rv = WaitForSingleObject(fcgi_dynamic_mbox_mutex, FCGI_MBOX_MUTEX_TIMEOUT);
+    int rv = WaitForSingleObject(fcgienc_dynamic_mbox_mutex, FCGIENC_MBOX_MUTEX_TIMEOUT);
 
     if (rv != WAIT_OBJECT_0 && rv != WAIT_ABANDONED) 
     {
-        log_message(ENCRYPT_LOG_ALERT,
+        ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server,
             "FastCGIENC: failed to aquire the dynamic mbox mutex - something is broke?!");
         return -1;
     }
 
-    new_job->next = fcgi_dynamic_mbox;
-    fcgi_dynamic_mbox = new_job;
+    new_job->next = fcgienc_dynamic_mbox;
+    fcgienc_dynamic_mbox = new_job;
 
-    if (! ReleaseMutex(fcgi_dynamic_mbox_mutex)) 
+    if (! ReleaseMutex(fcgienc_dynamic_mbox_mutex)) 
     {
-        log_message(ENCRYPT_LOG_ALERT,
+        ap_log_error(FCGIENC_LOG_ALERT, fcgienc_apache_main_server,
             "FastCGIENC: failed to release the dynamic mbox mutex - something is broke?!");
     }
 

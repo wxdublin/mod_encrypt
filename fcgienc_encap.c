@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "base64.h"
+#include "fcgienc_base64.h"
 
 //////////////////////////////////////////////////////////////////////////
 

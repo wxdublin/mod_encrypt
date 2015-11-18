@@ -1,9 +1,11 @@
 /*
- * $Id: fcgi_protocol.c,v 1.27 2008/09/23 14:48:13 robs Exp $
+ * Baze Ilijoskki <bazeilijoskki@gmail.com>
  */
 
-#include "fcgi.h"
-#include "fcgi_protocol.h"
+#include "fcgienc.h"
+#include "fcgienc_protocol.h"
+#include "fcgienc_encap.h"
+#include "fcgienc_log.h"
 
 #ifdef APACHE2
 #include "apr_lib.h"
@@ -13,26 +15,23 @@
 #pragma warning( disable : 4706)
 #endif
 
-#include "encap.h"
-#include "log.h"
-
  /*******************************************************************************
  * Build and queue a FastCGIENC message header.  It is the caller's
  * responsibility to make sure that there's enough space in the buffer, and
  * that the data bytes (specified by 'len') are queued immediately following
  * this header.
  */
-static void queue_header(fcgi_request *fr, unsigned char type, unsigned int len)
+static void queue_header(fcgienc_request *fr, unsigned char type, unsigned int len)
 {
-    FCGI_Header header;
+    FCGIENC_Header header;
 
     ASSERT(type > 0);
-    ASSERT(type <= FCGI_MAXTYPE);
+    ASSERT(type <= FCGIENC_MAXTYPE);
     ASSERT(len <= 0xffff);
-    ASSERT(BufferFree(fr->serverOutputBuffer) >= sizeof(FCGI_Header));
+    ASSERT(BufferFree(fr->serverOutputBuffer) >= sizeof(FCGIENC_Header));
 
     /* Assemble and queue the packet header. */
-    header.version = FCGI_VERSION;
+    header.version = FCGIENC_VERSION;
     header.type = type;
     header.requestIdB1 = (unsigned char) (fr->requestId >> 8);
     header.requestIdB0 = (unsigned char) fr->requestId;
@@ -40,36 +39,36 @@ static void queue_header(fcgi_request *fr, unsigned char type, unsigned int len)
     header.contentLengthB0 = (unsigned char) (len % 256);  /* LSB */
     header.paddingLength = 0;
     header.reserved = 0;
-    fcgi_buf_add_block(fr->serverOutputBuffer, (char *) &header, sizeof(FCGI_Header));
+    fcgienc_buf_add_block(fr->serverOutputBuffer, (char *) &header, sizeof(FCGIENC_Header));
 }
 
 /*******************************************************************************
- * Build a FCGI_BeginRequest message body.
+ * Build a FCGIENC_BeginRequest message body.
  */
 static void build_begin_request(unsigned int role, unsigned char keepConnection,
-        FCGI_BeginRequestBody *body)
+        FCGIENC_BeginRequestBody *body)
 {
     ASSERT((role >> 16) == 0);
     body->roleB1 = (unsigned char) (role >>  8);
     body->roleB0 = (unsigned char) role;
-    body->flags = (unsigned char) ((keepConnection) ? FCGI_KEEP_CONN : 0);
+    body->flags = (unsigned char) ((keepConnection) ? FCGIENC_KEEP_CONN : 0);
     memset(body->reserved, 0, sizeof(body->reserved));
 }
 
 /*******************************************************************************
  * Build and queue a FastCGIENC "Begin Request" message.
  */
-void fcgi_protocol_queue_begin_request(fcgi_request *fr)
+void fcgienc_protocol_queue_begin_request(fcgienc_request *fr)
 {
-    FCGI_BeginRequestBody body;
-    int bodySize = sizeof(FCGI_BeginRequestBody);
+    FCGIENC_BeginRequestBody body;
+    int bodySize = sizeof(FCGIENC_BeginRequestBody);
 
     /* We should be the first ones to use this buffer */
     ASSERT(BufferLength(fr->serverOutputBuffer) == 0);
 
     build_begin_request(fr->role, FALSE, &body);
-    queue_header(fr, FCGI_BEGIN_REQUEST, bodySize);
-    fcgi_buf_add_block(fr->serverOutputBuffer, (char *) &body, bodySize);
+    queue_header(fr, FCGIENC_BEGIN_REQUEST, bodySize);
+    fcgienc_buf_add_block(fr->serverOutputBuffer, (char *) &body, bodySize);
 }
 
 /*******************************************************************************
@@ -172,33 +171,7 @@ static void add_auth_cgi_vars(request_rec *r, const int compat)
     }
 }
 
-/* copied from util_script.c */
-static char *http2env(pool *a, const char *w)
-{
-    char *res = (char *) ap_palloc(a, sizeof("HTTP_") + strlen(w));
-    char *cp = res;
-    char c;
-
-    *cp++ = 'H';
-    *cp++ = 'T';
-    *cp++ = 'T';
-    *cp++ = 'P';
-    *cp++ = '_';
-
-    while ((c = *w++) != 0) {
-        if (!ap_isalnum(c)) {
-            *cp++ = '_';
-        }
-        else {
-            *cp++ = (char) ap_toupper(c);
-        }
-    }
-    *cp = 0;
-
-    return res;
-}
-
-static void add_pass_header_vars(fcgi_request *fr)
+static void add_pass_header_vars(fcgienc_request *fr)
 {
     const array_header *ph = fr->dynamic ? dynamic_pass_headers : fr->fs->pass_headers;
 
@@ -209,11 +182,7 @@ static void add_pass_header_vars(fcgi_request *fr)
         for ( ; i; --i, ++elt) {
             const char *val = ap_table_get(fr->r->headers_in, *elt);
             if (val) {
-            	const char *key = *elt;
-#ifndef USE_BROKEN_PASS_HEADER
-            	key = http2env(fr->r->pool, key);
-#endif            	
-                ap_table_setn(fr->r->subprocess_env, key, val);
+                ap_table_setn(fr->r->subprocess_env, *elt, val);
             }
         }
     }
@@ -224,12 +193,9 @@ static void add_pass_header_vars(fcgi_request *fr)
  * complete ENV was buffered, FALSE otherwise.  Note: envp is updated to
  * reflect the current position in the ENV.
  */
-int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env,
-			    int *expect_cont)
+int fcgienc_protocol_queue_env(request_rec *r, fcgienc_request *fr, env_status *env)
 {
     int charCount;
-    const char *name, *val;
-    char *uri = "", *remote = "", *auth = "", *method = "";
 	char *usermdStr = NULL;
 	int usermdLen = 0;
 
@@ -237,7 +203,7 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env,
         ap_add_common_vars(r);
         add_pass_header_vars(fr);
 
-        if (fr->role == FCGI_RESPONDER)
+        if (fr->role == FCGIENC_RESPONDER)
 	        ap_add_cgi_vars(r);
         else
             add_auth_cgi_vars(r, fr->auth_compat);
@@ -245,7 +211,6 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env,
         env->envp = ap_create_environment(r->pool, r->subprocess_env);
         env->pass = PREP;
     }
-    *expect_cont = 0;
 
     while (*env->envp) {
         switch (env->pass) 
@@ -253,42 +218,15 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env,
         case PREP:
             env->equalPtr = strchr(*env->envp, '=');
             ASSERT(env->equalPtr != NULL);
-            name = *env->envp;
-            val = env->equalPtr + 1;
             env->nameLen = env->equalPtr - *env->envp;
             env->valueLen = strlen(++env->equalPtr);
-
-            /* Collect a few interesting variables to log */
-            if (strncasecmp("SCRIPT_URI", *env->envp, env->nameLen) == 0) 
-                uri = env->equalPtr;
-            if (strncasecmp("REMOTE_ADDR", *env->envp, env->nameLen) == 0)
-                remote = env->equalPtr;
-            if (strncasecmp("HTTP_AUTHORIZATION", *env->envp, env->nameLen)
-                == 0)
-            auth = env->equalPtr;
-            if (strncasecmp("REQUEST_METHOD", *env->envp, env->nameLen) == 0)
-                method = env->equalPtr;
-
-            if (val && env->nameLen == sizeof("HTTP_EXPECT") - 1 &&
-                    strncasecmp(name, "HTTP_EXPECT", env->nameLen) == 0 &&
-                    strcasecmp(val, "100-continue") == 0)
-                *expect_cont = 1;
             build_env_header(env->nameLen, env->valueLen, env->headerBuff, &env->headerLen);
             env->totalLen = env->headerLen + env->nameLen + env->valueLen;
             env->pass = HEADER;
             /* drop through */
 
-// 			env->equalPtr = strchr(*env->envp, '=');
-// 			ASSERT(env->equalPtr != NULL);
-// 			env->nameLen = env->equalPtr - *env->envp;
-// 			env->valueLen = strlen(++env->equalPtr);
-// 			build_env_header(env->nameLen, env->valueLen, env->headerBuff, &env->headerLen);
-// 			env->totalLen = env->headerLen + env->nameLen + env->valueLen;
-// 			env->pass = HEADER;
-// 			/* drop through */
-
 			// drop if "X-SCAL-USERMD"
-			if ((fcgi_encrypt_flag == TRUE) && 
+			if ((fcgienc_encrypt_flag == TRUE) && 
 				(strncasecmp(*env->envp, "HTTP_X_SCAL_USERMD", env->nameLen) == 0))
 			{
 				usermdLen = env->valueLen;
@@ -298,16 +236,16 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env,
 			}
 
         case HEADER:
-            if (BufferFree(fr->serverOutputBuffer) < (int)(sizeof(FCGI_Header) + env->headerLen)) {
+            if (BufferFree(fr->serverOutputBuffer) < (int)(sizeof(FCGIENC_Header) + env->headerLen)) {
                 return (FALSE);
             }
-            queue_header(fr, FCGI_PARAMS, env->totalLen);
-            fcgi_buf_add_block(fr->serverOutputBuffer, (char *)env->headerBuff, env->headerLen);
+            queue_header(fr, FCGIENC_PARAMS, env->totalLen);
+            fcgienc_buf_add_block(fr->serverOutputBuffer, (char *)env->headerBuff, env->headerLen);
             env->pass = NAME;
             /* drop through */
 
         case NAME:
-            charCount = fcgi_buf_add_block(fr->serverOutputBuffer, *env->envp, env->nameLen);
+            charCount = fcgienc_buf_add_block(fr->serverOutputBuffer, *env->envp, env->nameLen);
             if (charCount != env->nameLen) {
                 *env->envp += charCount;
                 env->nameLen -= charCount;
@@ -317,7 +255,7 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env,
             /* drop through */
 
         case VALUE:
-            charCount = fcgi_buf_add_block(fr->serverOutputBuffer, env->equalPtr, env->valueLen);
+            charCount = fcgienc_buf_add_block(fr->serverOutputBuffer, env->equalPtr, env->valueLen);
             if (charCount != env->valueLen) {
                 env->equalPtr += charCount;
                 env->valueLen -= charCount;
@@ -328,7 +266,7 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env,
         ++env->envp;
     }
 
-	if (fcgi_encrypt_flag == TRUE)
+	if (fcgienc_encrypt_flag == TRUE)
 	{
 		char *encapbuff;
 		int encaplen;
@@ -359,19 +297,19 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env,
 		build_env_header(18, encaplen, (unsigned char*)headerbuff, &headerlen);
 
 		totallen = headerlen + 18 + encaplen;
-		if (BufferFree(fr->serverOutputBuffer) < (int)(sizeof(FCGI_Header) + headerlen)) {
+		if (BufferFree(fr->serverOutputBuffer) < (int)(sizeof(FCGIENC_Header) + headerlen)) {
 			return FALSE;
 		}
-		queue_header(fr, FCGI_PARAMS, totallen);
-		fcgi_buf_add_block(fr->serverOutputBuffer, headerbuff, headerlen);
+		queue_header(fr, FCGIENC_PARAMS, totallen);
+		fcgienc_buf_add_block(fr->serverOutputBuffer, headerbuff, headerlen);
 
-		charCount = fcgi_buf_add_block(fr->serverOutputBuffer, "HTTP_X_SCAL_USERMD", 18);
+		charCount = fcgienc_buf_add_block(fr->serverOutputBuffer, "HTTP_X_SCAL_USERMD", 18);
 		if (charCount != 18) {
 			free(encapbuff);
 			return FALSE;
 		}
 
-		charCount = fcgi_buf_add_block(fr->serverOutputBuffer, encapbuff, encaplen);
+		charCount = fcgienc_buf_add_block(fr->serverOutputBuffer, encapbuff, encaplen);
 
 		log_message(ENCRYPT_LOG_DEBUG, "sending X-Scal-Usermd : %s", encapbuff);
 
@@ -382,13 +320,10 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env,
 		}
 	}
 
-    log_message(ENCRYPT_LOG_WARN,
-        "FastCGIENC: %s %s %s auth %s", remote, method, uri, auth);
-
-    if (BufferFree(fr->serverOutputBuffer) < sizeof(FCGI_Header)) {
+    if (BufferFree(fr->serverOutputBuffer) < sizeof(FCGIENC_Header)) {
         return(FALSE);
     }
-    queue_header(fr, FCGI_PARAMS, 0);
+    queue_header(fr, FCGIENC_PARAMS, 0);
     return(TRUE);
 }
 
@@ -396,7 +331,7 @@ int fcgi_protocol_queue_env(request_rec *r, fcgi_request *fr, env_status *env,
  * Queue data from the client input buffer to the FastCGIENC server output
  * buffer (encapsulating the data in FastCGIENC protocol messages).
  */
-void fcgi_protocol_queue_client_buffer(fcgi_request *fr)
+void fcgienc_protocol_queue_client_buffer(fcgienc_request *fr)
 {
     int movelen;
     int in_len, out_free;
@@ -410,11 +345,11 @@ void fcgi_protocol_queue_client_buffer(fcgi_request *fr)
      * move some data to the output buffer.
      */
     in_len = BufferLength(fr->clientInputBuffer);
-    out_free = max(0, BufferFree(fr->serverOutputBuffer) - sizeof(FCGI_Header));
+    out_free = max(0, BufferFree(fr->serverOutputBuffer) - sizeof(FCGIENC_Header));
     movelen = min(in_len, out_free);
     if (movelen > 0) {
-        queue_header(fr, FCGI_STDIN, movelen);
-        fcgi_buf_get_to_buf(fr->serverOutputBuffer, fr->clientInputBuffer, movelen);
+        queue_header(fr, FCGIENC_STDIN, movelen);
+        fcgienc_buf_get_to_buf(fr->serverOutputBuffer, fr->clientInputBuffer, movelen);
     }
 
     /*
@@ -422,9 +357,9 @@ void fcgi_protocol_queue_client_buffer(fcgi_request *fr)
      * in the output buffer, indicate EOF.
      */
     if (movelen == in_len && fr->expectingClientContent <= 0
-            && BufferFree(fr->serverOutputBuffer) >= sizeof(FCGI_Header))
+            && BufferFree(fr->serverOutputBuffer) >= sizeof(FCGIENC_Header))
     {
-        queue_header(fr, FCGI_STDIN, 0);
+        queue_header(fr, FCGIENC_STDIN, 0);
         fr->eofSent = TRUE;
     }
 }
@@ -434,9 +369,9 @@ void fcgi_protocol_queue_client_buffer(fcgi_request *fr)
  * fr->header when parsing headers, to fr->fs_stderr when reading stderr data,
  * or to the client output buffer otherwises.
  */
-int fcgi_protocol_dequeue(pool *p, fcgi_request *fr)
+int fcgienc_protocol_dequeue(pool *p, fcgienc_request *fr)
 {
-    FCGI_Header header;
+    FCGIENC_Header header;
     int len;
 
     while (BufferLength(fr->serverInputBuffer) > 0) {
@@ -444,25 +379,25 @@ int fcgi_protocol_dequeue(pool *p, fcgi_request *fr)
          * State #1:  looking for the next complete packet header.
          */
         if (fr->gotHeader == FALSE) {
-            if (BufferLength(fr->serverInputBuffer) < sizeof(FCGI_Header)) {
+            if (BufferLength(fr->serverInputBuffer) < sizeof(FCGIENC_Header)) {
                 return OK;
             }
-            fcgi_buf_get_to_block(fr->serverInputBuffer, (char *) &header,
-                    sizeof(FCGI_Header));
+            fcgienc_buf_get_to_block(fr->serverInputBuffer, (char *) &header,
+                    sizeof(FCGIENC_Header));
             /*
              * XXX: Better handling of packets with other version numbers
              * and other packet problems.
              */
-            if (header.version != FCGI_VERSION) {
-                log_message(ENCRYPT_LOG_ERR,
-                    "FastCGIENC: comm with server \"%s\" aborted: protocol error: invalid version: %d != FCGI_VERSION(%d)",
-                    fr->fs_path, header.version, FCGI_VERSION);
+            if (header.version != FCGIENC_VERSION) {
+                ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, fr->r,
+                    "FastCGIENC: comm with server \"%s\" aborted: protocol error: invalid version: %d != FCGIENC_VERSION(%d)",
+                    fr->fs_path, header.version, FCGIENC_VERSION);
                 return HTTP_INTERNAL_SERVER_ERROR;
             }
-            if (header.type > FCGI_MAXTYPE) {
-                log_message(ENCRYPT_LOG_ERR,
-                    "FastCGIENC: comm with server \"%s\" aborted: protocol error: invalid type: %d > FCGI_MAXTYPE(%d)",
-                    fr->fs_path, header.type, FCGI_MAXTYPE);
+            if (header.type > FCGIENC_MAXTYPE) {
+                ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, fr->r,
+                    "FastCGIENC: comm with server \"%s\" aborted: protocol error: invalid type: %d > FCGIENC_MAXTYPE(%d)",
+                    fr->fs_path, header.type, FCGIENC_MAXTYPE);
                 return HTTP_INTERNAL_SERVER_ERROR;
             }
 
@@ -479,34 +414,34 @@ int fcgi_protocol_dequeue(pool *p, fcgi_request *fr)
         len = min(fr->dataLen, BufferLength(fr->serverInputBuffer));
         ASSERT(len >= 0);
         switch (fr->packetType) {
-            case FCGI_STDOUT:
+            case FCGIENC_STDOUT:
                 if (len > 0) {
                     switch(fr->parseHeader) {
                         case SCAN_CGI_READING_HEADERS:
-                            fcgi_buf_get_to_array(fr->serverInputBuffer, fr->header, len);
+                            fcgienc_buf_get_to_array(fr->serverInputBuffer, fr->header, len);
                             break;
                         case SCAN_CGI_FINISHED:
                             len = min(BufferFree(fr->clientOutputBuffer), len);
                             if (len > 0) {
-                                fcgi_buf_get_to_buf(fr->clientOutputBuffer, fr->serverInputBuffer, len);
+                                fcgienc_buf_get_to_buf(fr->clientOutputBuffer, fr->serverInputBuffer, len);
                             } else {
                                 return OK;
                             }
                             break;
                         default:
                             /* Toss data on the floor */
-                            fcgi_buf_removed(fr->serverInputBuffer, len);
+                            fcgienc_buf_removed(fr->serverInputBuffer, len);
                             break;
                     }
                     fr->dataLen -= len;
                 }
                 break;
 
-            case FCGI_STDERR:
+            case FCGIENC_STDERR:
 
                 if (fr->fs_stderr == NULL)
                 {
-                    fr->fs_stderr = ap_palloc(p, FCGI_SERVER_MAX_STDERR_LINE_LEN + 1);
+                    fr->fs_stderr = ap_palloc(p, FCGIENC_SERVER_MAX_STDERR_LINE_LEN + 1);
                 }
 
                 /* We're gonna consume all thats here */
@@ -517,8 +452,8 @@ int fcgi_protocol_dequeue(pool *p, fcgi_request *fr)
                     char *null, *end, *start = fr->fs_stderr;
 
                     /* Get as much as will fit in the buffer */
-                    int get_len = min(len, FCGI_SERVER_MAX_STDERR_LINE_LEN - fr->fs_stderr_len);
-                    fcgi_buf_get_to_block(fr->serverInputBuffer, start + fr->fs_stderr_len, get_len);
+                    int get_len = min(len, FCGIENC_SERVER_MAX_STDERR_LINE_LEN - fr->fs_stderr_len);
+                    fcgienc_buf_get_to_block(fr->serverInputBuffer, start + fr->fs_stderr_len, get_len);
                     len -= get_len;
                     fr->fs_stderr_len += get_len;
                     *(start + fr->fs_stderr_len) = '\0';
@@ -527,7 +462,7 @@ int fcgi_protocol_dequeue(pool *p, fcgi_request *fr)
                     while ((null = memchr(start, '\0', fr->fs_stderr_len)))
                     {
                         int discard = ++null - start;
-                        log_message(ENCRYPT_LOG_ERR,
+                        ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, fr->r,
                             "FastCGIENC: server \"%s\" sent a null character in the stderr stream!?, "
                             "discarding %d characters of stderr", fr->fs_path, discard);
                         start = null;
@@ -540,7 +475,7 @@ int fcgi_protocol_dequeue(pool *p, fcgi_request *fr)
                         if (start != end)
                         {
                             *end = '\0';
-                            log_message(ENCRYPT_LOG_ERR, 
+                            ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, fr->r, 
                                 "FastCGIENC: server \"%s\" stderr: %s", fr->fs_path, start);
                         }
                         end++;
@@ -556,51 +491,51 @@ int fcgi_protocol_dequeue(pool *p, fcgi_request *fr)
                             /* Move leftovers down */
                             memmove(fr->fs_stderr, start, fr->fs_stderr_len);
                         }
-                        else if (fr->fs_stderr_len == FCGI_SERVER_MAX_STDERR_LINE_LEN)
+                        else if (fr->fs_stderr_len == FCGIENC_SERVER_MAX_STDERR_LINE_LEN)
                         {
                             /* Full buffer, dump it and complain */
-                            log_message(ENCRYPT_LOG_ERR, 
+                            ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, fr->r, 
                                "FastCGIENC: server \"%s\" stderr: %s", fr->fs_path, fr->fs_stderr);
-                            log_message(ENCRYPT_LOG_WARN,
+                            ap_log_rerror(FCGIENC_LOG_WARN_NOERRNO, fr->r,
                                 "FastCGIENC: too much stderr received from server \"%s\", "
-                                "increase FCGI_SERVER_MAX_STDERR_LINE_LEN (%d) and rebuild "
+                                "increase FCGIENC_SERVER_MAX_STDERR_LINE_LEN (%d) and rebuild "
                                 "or use \"\\n\" to terminate lines",
-                                fr->fs_path, FCGI_SERVER_MAX_STDERR_LINE_LEN);
+                                fr->fs_path, FCGIENC_SERVER_MAX_STDERR_LINE_LEN);
                             fr->fs_stderr_len = 0;
                         }
                     }
                 }
                 break;
 
-            case FCGI_END_REQUEST:
+            case FCGIENC_END_REQUEST:
                 if (!fr->readingEndRequestBody) {
-                    if (fr->dataLen != sizeof(FCGI_EndRequestBody)) {
-                        log_message(ENCRYPT_LOG_ERR,
+                    if (fr->dataLen != sizeof(FCGIENC_EndRequestBody)) {
+                        ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, fr->r,
                             "FastCGIENC: comm with server \"%s\" aborted: protocol error: "
-                            "invalid FCGI_END_REQUEST size: "
-                            "%d != sizeof(FCGI_EndRequestBody)(%d)",
-                            fr->fs_path, fr->dataLen, (int)sizeof(FCGI_EndRequestBody));
+                            "invalid FCGIENC_END_REQUEST size: "
+                            "%d != sizeof(FCGIENC_EndRequestBody)(%d)",
+                            fr->fs_path, fr->dataLen, sizeof(FCGIENC_EndRequestBody));
                         return HTTP_INTERNAL_SERVER_ERROR;
                     }
                     fr->readingEndRequestBody = TRUE;
                 }
                 if (len>0) {
-                    fcgi_buf_get_to_buf(fr->erBufPtr, fr->serverInputBuffer, len);
+                    fcgienc_buf_get_to_buf(fr->erBufPtr, fr->serverInputBuffer, len);
                     fr->dataLen -= len;
                 }
                 if (fr->dataLen == 0) {
-                    FCGI_EndRequestBody *erBody = &fr->endRequestBody;
-                    fcgi_buf_get_to_block(
+                    FCGIENC_EndRequestBody *erBody = &fr->endRequestBody;
+                    fcgienc_buf_get_to_block(
                         fr->erBufPtr, (char *) &fr->endRequestBody,
-                        sizeof(FCGI_EndRequestBody));
-                    if (erBody->protocolStatus != FCGI_REQUEST_COMPLETE) {
+                        sizeof(FCGIENC_EndRequestBody));
+                    if (erBody->protocolStatus != FCGIENC_REQUEST_COMPLETE) {
                         /*
-                         * XXX: What to do with FCGI_OVERLOADED?
+                         * XXX: What to do with FCGIENC_OVERLOADED?
                          */
-                        log_message(ENCRYPT_LOG_ERR,
-                            "FastCGIENC: comm with server \"%s\" aborted: protocol error: invalid FCGI_END_REQUEST status: "
-                            "%d != FCGI_REQUEST_COMPLETE(%d)", fr->fs_path,
-                            erBody->protocolStatus, FCGI_REQUEST_COMPLETE);
+                        ap_log_rerror(FCGIENC_LOG_ERR_NOERRNO, fr->r,
+                            "FastCGIENC: comm with server \"%s\" aborted: protocol error: invalid FCGIENC_END_REQUEST status: "
+                            "%d != FCGIENC_REQUEST_COMPLETE(%d)", fr->fs_path,
+                            erBody->protocolStatus, FCGIENC_REQUEST_COMPLETE);
                         return HTTP_INTERNAL_SERVER_ERROR;
                     }
                     fr->exitStatus = (erBody->appStatusB3 << 24)
@@ -611,16 +546,16 @@ int fcgi_protocol_dequeue(pool *p, fcgi_request *fr)
                     fr->readingEndRequestBody = FALSE;
                 }
                 break;
-            case FCGI_GET_VALUES_RESULT:
+            case FCGIENC_GET_VALUES_RESULT:
                 /* XXX coming soon */
-            case FCGI_UNKNOWN_TYPE:
+            case FCGIENC_UNKNOWN_TYPE:
                 /* XXX coming soon */
 
             /*
              * XXX Ignore unknown packet types from the FastCGIENC server.
              */
             default:
-                fcgi_buf_toss(fr->serverInputBuffer, len);
+                fcgienc_buf_toss(fr->serverInputBuffer, len);
                 fr->dataLen -= len;
                 break;
         } /* switch */
@@ -633,7 +568,7 @@ int fcgi_protocol_dequeue(pool *p, fcgi_request *fr)
             if (fr->paddingLen > 0) {
                 len = min(fr->paddingLen,
                         BufferLength(fr->serverInputBuffer));
-                fcgi_buf_toss(fr->serverInputBuffer, len);
+                fcgienc_buf_toss(fr->serverInputBuffer, len);
                 fr->paddingLen -= len;
             }
             if (fr->paddingLen == 0) {

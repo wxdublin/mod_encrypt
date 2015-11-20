@@ -400,7 +400,6 @@ unsigned int time_utc_diff(const char *timestring)
 
 	// get parameter time
 	memset(&tmm, 0, sizeof(struct tm));
-	tmm.tm_isdst = 1;
 	strpptime(timestring, "%Y-%m-%dT%H:%M:%S.%zZ", &tmm);
 	mktime(&tmm);
 
@@ -408,6 +407,7 @@ unsigned int time_utc_diff(const char *timestring)
 	memset(&localtmm, 0, sizeof(struct tm));
 	t = time(NULL);
 	memcpy(&localtmm, gmtime(&t), sizeof(struct tm));
+	mktime(&localtmm);
 
 	diff = (unsigned int)diff_tm(&tmm, &localtmm);
 

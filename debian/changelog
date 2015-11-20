@@ -1,0 +1,9 @@
+libapache-mod-encrypt (1.0.0-1) unstable; urgency=low
+
+  * Initail Release.
+
+ -- Bazeilijoskki <bazeilijoskki@gmail.com>  Fri, 20 Nov 2015 14:00:00 +0100
+
+Local variables:
+mode: debian-changelog
+End:

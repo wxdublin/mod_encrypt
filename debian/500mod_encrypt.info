@@ -1,0 +1,16 @@
+LoadModule: encrypt_module /usr/lib/apache/1.3/mod_encrypt.so
+Directives:
+ FastCgiEncServer
+ FastCgiEncConfig
+ FastCgiEncExternalServer
+ FastCgiEncIpcDir
+ FastCgiEncSuexec
+ FastCgiEncAuthenticator
+ FastCgiEncAuthenticatorAuthoritative
+ FastCgiEncAuthorizer
+ FastCgiEncAuthorizerAuthoritative
+ FastCgiEncAccessChecker
+ FastCgiEncAccessCheckerAuthoritative
+Handles:
+ encrypt-script
+Description: Support for FastCGIENC

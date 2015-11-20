@@ -10,7 +10,7 @@ mod_encrypt-deb
 
 ##Building##
 
-1. sudo apt-get install apache2 dpkg-dev cdbs debhelper
+1. sudo apt-get install apache2 apache2-dev libcurl4-openssl-dev libtool dpkg-dev cdbs debhelper
 2. git clone https://github.com/GiorgioRegni/mod_encrypt.git
 3. cd mod_encrypt
 4. dpkg-buildpackage -d -b

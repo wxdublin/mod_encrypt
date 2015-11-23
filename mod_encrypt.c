@@ -2752,7 +2752,7 @@ static int content_handler(request_rec *r)
 		if (InitEncrypt(&fr->encryptor) != 0)
 		{
 			log_message(ENCRYPT_LOG_INFO, "Failed to init encrypt module");
-			ret = HTTP_UNAUTHORIZED;
+			ret = HTTP_SERVICE_UNAVAILABLE;
 			goto HANDLER_EXIT;
 		}
 	}

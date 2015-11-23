@@ -341,6 +341,10 @@ static int get_master_key(const char *token, char *masterkeyid, char *masterkey,
 		ret = -1;
 		goto MASTERKEY_EXIT;
 	}
+	if (strcmp(jsonmasterkeyid, masterkeyid))
+	{
+		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - unmatched master key id in old-%s : new-%s", masterkeyid, jsonmasterkeyid);
+	}
 
 	// get refresh time
 	timeout = json_get_integer(jsonhandler, "refresh_interval");
@@ -371,12 +375,6 @@ static int get_master_key(const char *token, char *masterkeyid, char *masterkey,
 	}
 
 	// store into variable
-	len = strlen(jsonmasterkeyid);
-	if (len > 255)
-		len = 255;
-	memcpy(masterkeyid, jsonmasterkeyid, len);
-	masterkeyid[len] = 0;
-
 	len = strlen(jsonmasterkey);
 	if (len > 255)
 		len = 255;
@@ -492,8 +490,11 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 	if (strcmp(jsonmasterkeyid, masterkeyid))
 	{
 		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - unmatched master key id in old-%s : new-%s", masterkeyid, jsonmasterkeyid);
-		memcpy(masterkeyid, jsonmasterkeyid, strlen(jsonmasterkeyid));
-		masterkeyid[strlen(jsonmasterkeyid)] = 0;
+		len = strlen(jsonmasterkeyid);
+		if (len > 255)
+			len = 255;
+		memcpy(masterkeyid, jsonmasterkeyid, len);
+		masterkeyid[len] = 0;
 	}
 
 	// get refresh interval
@@ -562,13 +563,11 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 	{
 		timeout = 0;
 
-		// initialize fc
-		memset(&fc, 0, sizeof(fcgienc_crypt));
-
 		// Authentication Token
 		authtimeout -= 30;
 		if (authtimeout <= 30)
 		{
+			fc.token[0] = 0;
 			timeout = get_auth_token(fc.token);
 			if (timeout > 0)
 			{
@@ -586,37 +585,13 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 		{
 			goto KEY_ERROR;
 		}
-		
-		// Master Key
-		mktimeout -= 30;
-		if (mktimeout <= 30)
-		{
-			timeout = get_master_key(fc.token, fc.masterKeyId, fc.masterKey, fc.initializationVector);
-			if (timeout > 0)
-			{
-				memcache_set(CACHE_KEYNAME_MAKSTERKEYID, fc.masterKeyId, timeout);
-				memcache_set(CACHE_KEYNAME_MAKSTERKEY, fc.masterKey, timeout);
-				memcache_set(CACHE_KEYNAME_IV, fc.initializationVector, timeout);
-				mktimeout = timeout;
-				dktimeout = -1;
-			}
-			else
-			{
-				goto KEY_ERROR;
-			}
-		}
-		ret = memcache_get(CACHE_KEYNAME_MAKSTERKEYID, fc.masterKeyId);
-		ret += memcache_get(CACHE_KEYNAME_MAKSTERKEY, fc.masterKey);
-		ret += memcache_get(CACHE_KEYNAME_IV, fc.initializationVector);
-		if (ret < 0)
-		{
-			goto KEY_ERROR;
-		}
-		
+
 		// Data Key
 		dktimeout -= 30;
 		if (dktimeout <= 30)
 		{
+			fc.dataKeyId[0] = 0;
+			fc.encryptedDataKey[0] = 0;
 			timeout = get_data_key(fc.token, fc.masterKeyId, fc.dataKeyId, fc.encryptedDataKey);
 			if (timeout > 0)
 			{
@@ -633,6 +608,31 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 		ret = memcache_get(CACHE_KEYNAME_MAKSTERKEYID, fc.masterKeyId);
 		ret += memcache_get(CACHE_KEYNAME_DATAKEYID, fc.dataKeyId);
 		ret += memcache_get(CACHE_KEYNAME_ENCRYPTEDDATAKEY, fc.encryptedDataKey);
+		if (ret < 0)
+		{
+			goto KEY_ERROR;
+		}
+		
+		// Master Key
+		mktimeout -= 30;
+		if (mktimeout <= 30)
+		{
+			fc.masterKey[0] = 0;
+			fc.initializationVector[0] = 0;
+			timeout = get_master_key(fc.token, fc.masterKeyId, fc.masterKey, fc.initializationVector);
+			if (timeout > 0)
+			{
+				memcache_set(CACHE_KEYNAME_MAKSTERKEY, fc.masterKey, timeout);
+				memcache_set(CACHE_KEYNAME_IV, fc.initializationVector, timeout);
+				mktimeout = timeout;
+			}
+			else
+			{
+				goto KEY_ERROR;
+			}
+		}
+		ret = memcache_get(CACHE_KEYNAME_MAKSTERKEY, fc.masterKey);
+		ret += memcache_get(CACHE_KEYNAME_IV, fc.initializationVector);
 		if (ret < 0)
 		{
 			goto KEY_ERROR;

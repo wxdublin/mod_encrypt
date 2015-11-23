@@ -15,7 +15,7 @@ APXS      = apxs
 APACHECTL = apachectl
 
 #DEFS=-Dmy_define=my_value
-INCLUDES=-./jansson
+#INCLUDES=-./jansson
 #LIBS=-Lmy/lib/dir -lmylib
 
 all: local-shared-build

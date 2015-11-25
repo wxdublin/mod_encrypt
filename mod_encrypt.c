@@ -838,13 +838,7 @@ static const char *process_headers(request_rec *r, fcgienc_request *fr)
 			if (!usermdStr)
 				return NULL;
 
-			if (usermdLen > 255)
-			{
-				log_message(ENCRYPT_LOG_ERR, "too long usermd length or key len usermdLen:%d", usermdLen);
-				return NULL;
-			}
-
-			if (usermdLen > 1024)
+			if (usermdLen > 2048)
 				log_message(ENCRYPT_LOG_DEBUG, "received X-Scal-Usermd : too long to display");
 			else
 				log_message(ENCRYPT_LOG_DEBUG, "received X-Scal-Usermd : %s", usermdMetadata);

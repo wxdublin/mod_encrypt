@@ -277,12 +277,6 @@ int fcgienc_protocol_queue_env(request_rec *r, fcgienc_request *fr, env_status *
 		mkidlen = strlen(fr->encryptor.masterKeyId);
 		dkidlen = strlen(fr->encryptor.dataKeyId);
 
-		if ((usermdLen > 255) || (mkidlen > 255) || (dkidlen > 255))
-		{
-			log_message(ENCRYPT_LOG_ERR, "too long usermd length or key len usermdLen:%d, mkidlen:%d, dkidlen:%d", usermdLen, mkidlen, dkidlen);
-			return FALSE;
-		}
-
 		encaplen = (46 + usermdLen + mkidlen + dkidlen) * 2;
 
 		encapbuff = malloc(encaplen);
@@ -317,7 +311,7 @@ int fcgienc_protocol_queue_env(request_rec *r, fcgienc_request *fr, env_status *
 
 		charCount = fcgienc_buf_add_block(fr->serverOutputBuffer, encapbuff, encaplen);
 
-		if (encaplen > 1024)
+		if (encaplen > 2048)
 			log_message(ENCRYPT_LOG_DEBUG, "sending X-Scal-Usermd : too long to display");
 		else
 			log_message(ENCRYPT_LOG_DEBUG, "sending X-Scal-Usermd : %s", encapbuff);

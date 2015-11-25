@@ -57,11 +57,6 @@ EVP_CIPHER_CTX *InitAesCtr(unsigned char *keydata, int keydata_len)
 	if ((!keydata) || (keydata_len == 0))
 		return NULL;
 
-	/* Initialize the library */
-	ERR_load_crypto_strings();
-	OpenSSL_add_all_algorithms();
-	OPENSSL_config(NULL);
-
 	/* Create and initialize the encryption context */
 	if(!(ctx = EVP_CIPHER_CTX_new())) 
 		return NULL;
@@ -94,11 +89,8 @@ void UninitAesCtr(EVP_CIPHER_CTX *ctx)
 		return;
 
 	/* Clean up */
+	EVP_CIPHER_CTX_cleanup(ctx);
 	EVP_CIPHER_CTX_free(ctx);
-
-	/* Clean up */
-	EVP_cleanup();
-	ERR_free_strings();
 }
 
 int CryptAesCtr(EVP_CIPHER_CTX *ctx, unsigned char *plaintext, int plainlen, unsigned char *ciphertext)

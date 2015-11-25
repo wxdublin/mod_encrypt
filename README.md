@@ -39,11 +39,11 @@ This is the simple example how to use mod_encyrpt :
           FastCgiEncAuthServer 52.25.196.147
           FastCgiEncMasterKeyServer 52.25.196.147
           FastCgiEncDataKeyServer 52.25.196.147
-	  FastCgiEncKeyString testkeystring
+          FastCgiEncKeyString testkeystring
           FastCgiEncMemcachedServer 127.0.0.1:11211
           FastCgiEncUserName test_user
           FastCgiEncPassword test_password
-          FastCgiEncLogpath /var/log/apache2/encrypt.log 3
+          FastCgiEncLogpath /var/log/httpd/encrypt.log 7
       </IfModule>
 
 myFCGI and host IP/Port should be changed in your case.  
@@ -117,4 +117,4 @@ Context: server config
   
 Config log file path and level  
 Need to set user RW permission to the file directory of log  
-level 0:Error, 1:Warning, 2:Info, 3:Track  
+level EMERG:0, ALERT:1, CRIT:2, ERR:3, WARN:4, NOTICE:5, INFO:6, DEBUG:7  

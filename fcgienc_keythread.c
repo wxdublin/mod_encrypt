@@ -182,7 +182,6 @@ static int get_auth_token(char *tokenstr)
 	sprintf(serverurl, "http://%s/auth", fcgienc_authserver);
 	sprintf(senddata, "{\"username\":\"%s\",\"password\":\"%s\"}", fcgienc_username, fcgienc_password);
 
-	curl_global_init(CURL_GLOBAL_DEFAULT);
 	curl = curl_easy_init();
 	if(curl) 
 	{
@@ -217,8 +216,6 @@ static int get_auth_token(char *tokenstr)
 		curl_slist_free_all( headers ) ; headers = NULL;
 		curl_easy_cleanup(curl); curl = NULL;
 	}
-
-	curl_global_cleanup();
 
 	// process json response
 	jsonhandler = json_load(recvdata);
@@ -257,7 +254,6 @@ static int get_auth_token(char *tokenstr)
 AUTH_REQUEST_EXIT:
 	if (headers) curl_slist_free_all( headers ) ;
 	if (curl) curl_easy_cleanup(curl);
-	curl_global_cleanup();
 
 	if (jsonhandler) json_unload(jsonhandler);
 
@@ -298,8 +294,6 @@ static int get_master_key(const char *token, char *masterkeyid, char *masterkey,
 	else
 		sprintf(serverurl, "http://%s/master/key", fcgienc_masterkeyserver);
 
-	curl_global_init(CURL_GLOBAL_DEFAULT);
- 
 	curl = curl_easy_init();
 	if(curl) {
 		curl_easy_setopt(curl, CURLOPT_URL, serverurl);
@@ -326,8 +320,6 @@ static int get_master_key(const char *token, char *masterkeyid, char *masterkey,
 		curl_easy_cleanup(curl); curl = NULL;
 		curl_slist_free_all( headers ) ; headers = NULL;
 	}
-
-	curl_global_cleanup();
 
 	// process json response
 	jsonhandler = json_load(recvdata);
@@ -392,7 +384,6 @@ static int get_master_key(const char *token, char *masterkeyid, char *masterkey,
 MASTERKEY_EXIT:
 	if (headers) curl_slist_free_all( headers ) ;
 	if (curl) curl_easy_cleanup(curl);
-	curl_global_cleanup();
 
 	if (jsonhandler) json_unload(jsonhandler);
 	return ret;
@@ -430,8 +421,6 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 	else
 		sprintf(serverurl, "http://%s/data/key", fcgienc_datakeyserver);
 
-	curl_global_init(CURL_GLOBAL_DEFAULT);
-
 	curl = curl_easy_init();
 	if(curl) {
 		curl_easy_setopt(curl, CURLOPT_URL, serverurl);
@@ -461,8 +450,6 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 		curl_easy_cleanup(curl); curl = NULL;
 		curl_slist_free_all( headers ) ; headers = NULL;
 	}
-
-	curl_global_cleanup();
 
 	// process json response
 	jsonhandler = json_load(recvdata);
@@ -533,7 +520,6 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 DATAKEY_EXIT:
 	if (headers) curl_slist_free_all( headers ) ;
 	if (curl) curl_easy_cleanup(curl);
-	curl_global_cleanup();
 
 	if (jsonhandler) json_unload(jsonhandler);
 	return ret;

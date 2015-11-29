@@ -48,7 +48,7 @@
  *   processing, so, for now, make it hard.
  */
 
-
+#include <curl/curl.h>
 #include "fcgienc.h"
 #include "fcgienc_log.h"
 #include "fcgienc_keythread.h"
@@ -368,26 +368,20 @@ static apcb_t init_module(server_rec *s, pool *p)
 
     close(fcgienc_pm_pipe[0]);
 
-	/* Initialize Memcache and Key Thread */
+	/* Initialize Log path */
 	{
 		int ret;
+		const char *err;
 
 		/* Create log file */
-		if (fcgienc_logpath) {
+		if (fcgienc_logpath)
+		{
 			if ((err = fcgienc_config_make_logfile(p, fcgienc_logpath)))
 				log_message(ENCRYPT_LOG_ERR, "FastCGIENC: %s", err);
 		}
 
-		// init key thread
-		ret = key_thread_init();
-		if (ret < 0)
-		{
-			log_message(ENCRYPT_LOG_DEBUG, "%s", "Could not init key thread, please check parameters and server addresses");
-		}
-		else
-		{
-			log_message(ENCRYPT_LOG_INFO, "%s", "Started key thread");
-		}
+		/* initialize global curl */
+		curl_global_init(CURL_GLOBAL_DEFAULT);
 	}
 
 #endif /* !WIN32 */
@@ -450,9 +444,8 @@ static void fcgienc_child_init(server_rec *dc, pool *p)
             "_beginthread() failed to spawn the process manager");
     }
 
-	/* Initialize Memcache and Key Thread */
+	/* Initialize Log path */
 	{
-		int ret;
 		const char *err;
 
 		/* Create log file */
@@ -462,16 +455,8 @@ static void fcgienc_child_init(server_rec *dc, pool *p)
 				log_message(ENCRYPT_LOG_ERR, "FastCGIENC: %s", err);
 		}
 
-		// init key thread
-		ret = key_thread_init();
-		if (ret < 0)
-		{
-			log_message(ENCRYPT_LOG_DEBUG, "%s", "Could not init key thread, please check parameters and server addresses");
-		}
-		else
-		{
-			log_message(ENCRYPT_LOG_INFO, "%s", "Started key thread");
-		}
+		/* initialize global curl */
+		curl_global_init(CURL_GLOBAL_DEFAULT);
 	}
 
 #ifdef APACHE2

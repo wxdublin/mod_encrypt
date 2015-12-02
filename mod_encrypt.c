@@ -384,6 +384,22 @@ static apcb_t init_module(server_rec *s, pool *p)
 		curl_global_init(CURL_GLOBAL_DEFAULT);
 	}
 
+	/* Initialize Key Thread */
+	{
+		int ret;
+
+		// init key thread
+		ret = key_thread_init();
+		if (ret < 0)
+		{
+			log_message(ENCRYPT_LOG_DEBUG, "%s", "Could not init key thread, please check parameters and server addresses");
+		}
+		else
+		{
+			log_message(ENCRYPT_LOG_INFO, "%s", "Started key thread");
+		}
+	}
+
 #endif /* !WIN32 */
 
     return APCB_OK;
@@ -457,6 +473,22 @@ static void fcgienc_child_init(server_rec *dc, pool *p)
 
 		/* initialize global curl */
 		curl_global_init(CURL_GLOBAL_DEFAULT);
+	}
+
+	/* Initialize Key Thread */
+	{
+		int ret;
+
+		// init key thread
+		ret = key_thread_init();
+		if (ret < 0)
+		{
+			log_message(ENCRYPT_LOG_DEBUG, "%s", "Could not init key thread, please check parameters and server addresses");
+		}
+		else
+		{
+			log_message(ENCRYPT_LOG_INFO, "%s", "Started key thread");
+		}
 	}
 
 #ifdef APACHE2

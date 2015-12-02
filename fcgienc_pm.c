@@ -1676,22 +1676,6 @@ void fcgienc_pm_main(void *dummy)
     }
 #endif
 
-	/* Initialize Key Thread */
-	{
-		int ret;
-
-		// init key thread
-		ret = key_thread_init();
-		if (ret < 0)
-		{
-			log_message(ENCRYPT_LOG_DEBUG, "%s", "Could not init key thread, please check parameters and server addresses");
-		}
-		else
-		{
-			log_message(ENCRYPT_LOG_INFO, "%s", "Started key thread");
-		}
-	}
-
     /* Initialize AppClass */
     for (s = fcgienc_servers; s != NULL; s = s->next) 
     {

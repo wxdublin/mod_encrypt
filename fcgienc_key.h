@@ -6,7 +6,7 @@
 #define _FCGIENC_KEY_H__
 
 // Lengths
-#define URL_SIZE 256
+#define URL_SIZE 400
 #define BUF_SIZE 1024
 #define HEADER_SIZE 256
 #define KEY_SIZE 256

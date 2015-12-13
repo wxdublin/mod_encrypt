@@ -48,7 +48,6 @@
  *   processing, so, for now, make it hard.
  */
 
-#include <crtdbg.h>
 #include <curl/curl.h>
 #include "fcgienc.h"
 #include "fcgienc_log.h"

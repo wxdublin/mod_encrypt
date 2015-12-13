@@ -5,7 +5,7 @@
 
 Name:           mod_encrypt
 Version:        1.0.0
-Release:        1
+Release:        10
 
 Group:          Web
 License:        OpenSource
@@ -53,6 +53,7 @@ EOF
 
 %files
 %defattr(-,root,root, 0775)
-%attr(0644,root,root) %{_libdir}/httpd/modules/%{name}.so
+%attr(0755,root,root) %{_libdir}/httpd/modules/%{name}.so
+%attr(0755,root,root) %{_libdir}/httpd/modules/mod_enckeythread.bin
 %attr(0644,root,root) %{_sysconfdir}/httpd/conf.d/encrypt.conf
 

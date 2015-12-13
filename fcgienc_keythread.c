@@ -2,19 +2,72 @@
 #include <stdlib.h>
 #include <string.h>
 #include <curl/curl.h>
+#include <time.h>
+#include <sys/timeb.h>
 
 #ifndef WIN32
 #include <unistd.h>
 #endif
-#include "fcgienc.h"
+#include "fcgi.h"
+#include "fcgienc_keythread.h"
 #include "fcgienc_memcache.h"
 #include "fcgienc_json.h"
 #include "fcgienc_utctime.h"
-#include "fcgienc_key.h"
 #include "fcgienc_base64.h"
 #include "fcgienc_aes256cbc.h"
 #include "fcgienc_log.h"
 
+//////////////////////////////////////////////////////////////////////////
+char *fcgienc_memcached_server;
+unsigned short fcgienc_memcached_port;
+
+char *fcgienc_authserver;				/* FastCGIENC Auth Server */
+char *fcgienc_masterkeyserver;			/* FastCGIENC Master Key Server */
+char *fcgienc_datakeyserver;				/* FastCGIENC Data Key Server */
+char *fcgienc_username;					/* FastCGIENC User Name */
+char *fcgienc_password;					/* FastCGIENC Password */
+
+static FILE *fcgienc_logfp;
+
+//////////////////////////////////////////////////////////////////////////
+/**
+* log message
+*/
+static void log_keythread(const char *fmt, ...)
+{
+	va_list ap;
+	char headbuffer[128];
+	char msgbuffer[4096];
+
+	time_t rawtime;
+	struct tm * timeinfo;
+	char timebuf[64];
+	struct timeb timer_msec;
+	long long int timestamp_msec;
+
+	// check parameter
+	if (!fcgienc_logfp)
+		return;
+
+	time (&rawtime);
+	timeinfo = localtime (&rawtime);
+	strftime (timebuf, 64, "%Y-%m-%d %H:%M:%S", timeinfo);
+
+	ftime(&timer_msec);
+	timestamp_msec = (long long int) timer_msec.millitm;
+
+	sprintf(headbuffer, "%s,%03lld [KEY-THREAD] ", timebuf, timestamp_msec);
+
+	va_start(ap, fmt);
+	vsprintf(msgbuffer, fmt, ap);
+	va_end(ap);
+
+	// file operation
+	fprintf(fcgienc_logfp, "%s %s\n", headbuffer, msgbuffer);
+	fflush(fcgienc_logfp);
+
+	return;
+}
 
 //////////////////////////////////////////////////////////////////////////
 /**
@@ -200,32 +253,28 @@ static int get_auth_token(char *tokenstr)
 
 		/* Perform the request, res will get the return code */ 
 		res = curl_easy_perform(curl);
-		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - curl request : %s, senddata : %s", serverurl, senddata);
+		log_keythread("KEY-THREAD - curl request : %s, senddata : %s", serverurl, senddata);
 
 		/* Check for errors */ 
 		if(res != CURLE_OK)
 		{
-			log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - curl failed : %s", curl_easy_strerror(res));
+			log_keythread("KEY-THREAD - curl failed : %s", curl_easy_strerror(res));
 
-			fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 			ret = -1;
 			goto AUTH_REQUEST_EXIT;
 		}
-
-		/* always cleanup */ 
-		curl_slist_free_all( headers ) ; headers = NULL;
-		curl_easy_cleanup(curl); curl = NULL;
 	}
 
 	// process json response
 	jsonhandler = json_load(recvdata);
-	log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - curl response : %s", recvdata);
+	log_keythread("KEY-THREAD - curl response : %s", recvdata);
 
 	// get token
 	token = json_get_string(jsonhandler, "token");
 	if (!token)
 	{
-		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - not found \"token\" in response : %s", recvdata);
+		log_keythread("KEY-THREAD - not found \"token\" in response : %s", recvdata);
+		
 		ret = -1;
 		goto AUTH_REQUEST_EXIT;
 	}
@@ -234,7 +283,8 @@ static int get_auth_token(char *tokenstr)
 	timestring = json_get_string(jsonhandler, "expiration_time");
 	if (!timestring)
 	{
-		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - not found \"expiration_time\" in response : %s", recvdata);
+		log_keythread("KEY-THREAD - not found \"expiration_time\" in response : %s", recvdata);
+		
 		ret = -1;
 		goto AUTH_REQUEST_EXIT;
 	}
@@ -306,43 +356,41 @@ static int get_master_key(const char *token, char *masterkeyid, char *masterkey,
 
 		/* Perform the request, res will get the return code */ 
 		res = curl_easy_perform(curl);
-		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - curl request : %s, header : %s", serverurl, headerstring);
-
+		log_keythread("KEY-THREAD - curl request : %s, header : %s", serverurl, headerstring);
+		
 		/* Check for errors */ 
 		if(res != CURLE_OK)
 		{
-			log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - curl failed : %s", curl_easy_strerror(res));
+			log_keythread("KEY-THREAD - curl failed : %s", curl_easy_strerror(res));
+			
 			ret = -1;
 			goto MASTERKEY_EXIT;
 		}
-
-		/* always cleanup */ 
-		curl_easy_cleanup(curl); curl = NULL;
-		curl_slist_free_all( headers ) ; headers = NULL;
 	}
 
 	// process json response
 	jsonhandler = json_load(recvdata);
-	log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - curl response : %s", recvdata);
-
+	log_keythread("KEY-THREAD - curl response : %s", recvdata);
+	
 	// get key_id
 	jsonmasterkeyid = json_get_string(jsonhandler, "key_id");
 	if (!jsonmasterkeyid)
 	{
-		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - not found \"master key id\" in response : %s", recvdata);
+		log_keythread("KEY-THREAD - not found \"master key id\" in response : %s", recvdata);
+		
 		ret = -1;
 		goto MASTERKEY_EXIT;
 	}
 	if (strcmp(jsonmasterkeyid, masterkeyid))
 	{
-		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - unmatched master key id in old-%s : new-%s", masterkeyid, jsonmasterkeyid);
+		log_keythread("KEY-THREAD - unmatched master key id in old-%s : new-%s", masterkeyid, jsonmasterkeyid);
 	}
 
 	// get refresh time
 	timeout = json_get_integer(jsonhandler, "refresh_interval");
 	if (timeout < 0)
 	{
-		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - not found \"master key refresh_interval\" in response : %s", recvdata);
+		log_keythread("KEY-THREAD - not found \"master key refresh_interval\" in response : %s", recvdata);
 
 		ret = -1;
 		goto MASTERKEY_EXIT;
@@ -360,7 +408,7 @@ static int get_master_key(const char *token, char *masterkeyid, char *masterkey,
 	jsoniv = json_get_string(jsonhandler, "initialization_vector");
 	if (!jsoniv)
 	{
-		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - not found \"initialization_vector\" in response : %s", recvdata);
+		log_keythread("KEY-THREAD - not found \"initialization_vector\" in response : %s", recvdata);
 
 		ret = -1;
 		goto MASTERKEY_EXIT;
@@ -433,33 +481,27 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 
 		/* Perform the request, res will get the return code */ 
 		res = curl_easy_perform(curl);
-		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - curl request : %s, header : %s", serverurl, headerstring);
+		log_keythread("KEY-THREAD - curl request : %s, header : %s", serverurl, headerstring);
 
 		/* Check for errors */ 
 		if(res != CURLE_OK)
 		{
-			log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - curl failed : %s", curl_easy_strerror(res));
+			log_keythread("KEY-THREAD - curl failed : %s", curl_easy_strerror(res));
 
-			fprintf(stderr, "curl_easy_perform() failed: %s\n",	curl_easy_strerror(res));
-			curl_easy_cleanup(curl);
-			curl_slist_free_all( headers ) ;
-			return -1;
+			ret = -1;
+			goto DATAKEY_EXIT;
 		}
-
-		/* always cleanup */ 
-		curl_easy_cleanup(curl); curl = NULL;
-		curl_slist_free_all( headers ) ; headers = NULL;
 	}
 
 	// process json response
 	jsonhandler = json_load(recvdata);
-	log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - curl response : %s", recvdata);
-
+	log_keythread("KEY-THREAD - curl response : %s", recvdata);
+	
 	// get data key id
 	jsondatakeyid = json_get_string(jsonhandler, "key_id");
 	if (!jsondatakeyid)
 	{
-		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - not found \"data key id\" in response : %s", recvdata);
+		log_keythread("KEY-THREAD - not found \"data key id\" in response : %s", recvdata);
 
 		ret = -1;
 		goto DATAKEY_EXIT;
@@ -469,14 +511,15 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 	jsonmasterkeyid = json_get_string(jsonhandler, "master_key_id");
 	if (!jsonmasterkeyid)
 	{
-		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - not found master key id in response : %s", recvdata);
+		log_keythread("KEY-THREAD - not found master key id in response : %s", recvdata);
 
 		ret = -1;
 		goto DATAKEY_EXIT;
 	}
 	if (strcmp(jsonmasterkeyid, masterkeyid))
 	{
-		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - unmatched master key id in old-%s : new-%s", masterkeyid, jsonmasterkeyid);
+		log_keythread("KEY-THREAD - unmatched master key id in old-%s : new-%s", masterkeyid, jsonmasterkeyid);
+
 		len = strlen(jsonmasterkeyid);
 		if (len > 255)
 			len = 255;
@@ -488,7 +531,7 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 	timeout = json_get_integer(jsonhandler, "refresh_interval");
 	if (timeout < 0)
 	{
-		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - not found \"data key refresh_interval\" in response : %s", recvdata);
+		log_keythread("KEY-THREAD - not found \"data key refresh_interval\" in response : %s", recvdata);
 		ret = -1;
 		goto DATAKEY_EXIT;
 	}
@@ -497,7 +540,7 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 	jsonkeyencryptedbase64 = json_get_string(jsonhandler, "key_encrypted_base64");
 	if (!jsonkeyencryptedbase64)
 	{
-		log_message(ENCRYPT_LOG_DEBUG, "KEY-THREAD - not found \"key_encrypted_base64\" in response : %s", recvdata);
+		log_keythread("KEY-THREAD - not found \"key_encrypted_base64\" in response : %s", recvdata);
 		ret = -1;
 		goto DATAKEY_EXIT;
 	}
@@ -528,7 +571,7 @@ DATAKEY_EXIT:
 /**
  * Thread entry point
  */
-void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
+void key_thread_func()
 {
 	int ret;
 	fcgienc_crypt fc;
@@ -539,9 +582,10 @@ void* APR_THREAD_FUNC key_thread_func(apr_thread_t *thd, void *params)
 	if (!fcgienc_username || !fcgienc_password || !fcgienc_authserver || \
 		!fcgienc_masterkeyserver || !fcgienc_datakeyserver)
 	{
-		apr_thread_exit(thd, APR_SUCCESS);
-		return NULL;
+		return;
 	}
+
+	memset(&fc, 0, sizeof(fcgienc_crypt));
 
 	// init timeout values
 	authtimeout = mktimeout = dktimeout = 0;
@@ -656,49 +700,38 @@ KEY_ERROR:
 #endif
 	}
 	
-	apr_thread_exit(thd, APR_SUCCESS);
-
-    return NULL;
+    return;
 }
 
-/**
- * first read the keys from key server and store into memcache
- */
-
-int key_thread_init(void)
+int main (int argc, char *argv[])
 {
-	int ret = 0;
-	apr_threadattr_t *threadAttr;
-	apr_status_t rv;
-	apr_pool_t *threadPool = NULL;
-	apr_thread_t *threadD = NULL;
-
-	// if already inited
-	if (threadD != NULL)
-		return 0;
-	
-	// check parameters
-	if (!fcgienc_username || !fcgienc_password || !fcgienc_authserver || 
-		!fcgienc_masterkeyserver || !fcgienc_datakeyserver)
+	// get argument list
+	if (argc != 9)
 	{
+		printf("need argument 9\n");
 		return -1;
 	}
+	fcgienc_authserver = argv[1];
+	fcgienc_masterkeyserver = argv[2];
+	fcgienc_datakeyserver = argv[3];
+	fcgienc_username = argv[4];
+	fcgienc_password = argv[5];
+	fcgienc_memcached_server = argv[7];
+	fcgienc_memcached_port = atoi(argv[8]);
 
-	// create key thread
-	if (threadPool)
-	{
-		apr_pool_destroy(threadPool);
-		threadPool = NULL;
-	}
+	/* initialize global curl */
+	curl_global_init(CURL_GLOBAL_DEFAULT);
 
-	apr_pool_create(&threadPool, NULL);
-	apr_threadattr_create(&threadAttr, threadPool);
-	rv = apr_thread_create(&threadD, threadAttr, key_thread_func, NULL, threadPool);
-	if (rv != APR_SUCCESS)
-	{
-		ret = -1;
-	}
-	apr_thread_detach(threadD);
+	// log start message
+	fcgienc_logfp = fopen (argv[6], "w+");
+	fprintf(fcgienc_logfp, "Started key process\n");
+	fflush(fcgienc_logfp);
 
-	return ret;
+	// init memcached
+	memcache_init();
+
+	// start thread
+	key_thread_func();
+
+	return 0;
 }

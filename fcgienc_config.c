@@ -314,7 +314,6 @@ apcb_t fcgienc_config_reset_globals(void* dummy)
 const char *fcgienc_config_make_logfile(pool *tp, char *path)
 {
     struct stat finfo;
-    const char *err = NULL;
 	apr_status_t rv; 
 
     /* Is the directory spec'd correctly */
@@ -818,12 +817,12 @@ const char *fcgienc_config_new_static_server(cmd_parms *cmd, void *dummy, const 
     {
         if (s->group == NULL)
         {
-            s->group = ap_psprintf(tp, "#%ld", fcgienc_util_get_server_gid(cmd->server));
+            s->group = ap_psprintf(tp, "#%ld", (long)fcgienc_util_get_server_gid(cmd->server));
         }
 
         if (s->user == NULL)
         {
-            s->user = ap_psprintf(p, "#%ld", fcgienc_util_get_server_uid(cmd->server)); 
+            s->user = ap_psprintf(p, "#%ld", (long)fcgienc_util_get_server_uid(cmd->server)); 
         }
 
         s->uid = ap_uname2id(s->user);
@@ -1011,12 +1010,12 @@ const char *fcgienc_config_new_external_server(cmd_parms *cmd, void *dummy, cons
     {
         if (s->group == NULL)
         {
-            s->group = ap_psprintf(tp, "#%ld", fcgienc_util_get_server_gid(cmd->server));
+            s->group = ap_psprintf(tp, "#%ld", (long)fcgienc_util_get_server_gid(cmd->server));
         }
 
         if (s->user == NULL)
         {
-            s->user = ap_psprintf(p, "#%ld", fcgienc_util_get_server_uid(cmd->server));
+            s->user = ap_psprintf(p, "#%ld", (long)fcgienc_util_get_server_uid(cmd->server));
         }
 
         s->uid = ap_uname2id(s->user);

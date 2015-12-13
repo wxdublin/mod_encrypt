@@ -48,12 +48,13 @@
  *   processing, so, for now, make it hard.
  */
 
+#include <crtdbg.h>
 #include <curl/curl.h>
 #include "fcgienc.h"
 #include "fcgienc_log.h"
-#include "fcgienc_keythread.h"
 #include "fcgienc_crypt.h"
 #include "fcgienc_encap.h"
+#include "fcgienc_memcache.h"
 
 #ifdef APACHE2
 #ifndef WIN32
@@ -370,7 +371,6 @@ static apcb_t init_module(server_rec *s, pool *p)
 
 	/* Initialize Log path */
 	{
-		int ret;
 		const char *err;
 
 		/* Create log file */
@@ -382,23 +382,49 @@ static apcb_t init_module(server_rec *s, pool *p)
 
 		/* initialize global curl */
 		curl_global_init(CURL_GLOBAL_DEFAULT);
+
+		/* initialize memcached */
+		if (memcache_init() != 0)
+		{
+			log_message(ENCRYPT_LOG_INFO, "%s", "Failed to initialize memcached, mod_encrypt will not accept the request");
+		}
 	}
 
-	/* Initialize Key Thread */
+	/* Initialize key process */
 	{
 		int ret;
+		FILE *fp;
+		char procpath[256];
+		char command[1024];
 
-		// init key thread
-		ret = key_thread_init();
-		if (ret < 0)
+		fp = popen("apxs -q exp_libexecdir", "r");
+		if (fp != NULL)
 		{
-			log_message(ENCRYPT_LOG_DEBUG, "%s", "Could not init key thread, please check parameters and server addresses");
+			if (fgets(procpath, 256, fp) == NULL)
+			{
+				log_message(ENCRYPT_LOG_INFO, "%s.", "Failed to start key process");
+			}
+			else
+			{
+				procpath[strlen(procpath)-1] = 0;
+				sprintf(command, "%s/mod_enckeythread.bin %s %s %s %s %s %s-keys %s %d &", \
+					procpath, fcgienc_authserver, fcgienc_masterkeyserver, fcgienc_datakeyserver, \
+					fcgienc_username, fcgienc_password, fcgienc_logpath, \
+					fcgienc_memcached_server, fcgienc_memcached_port);
+
+				ret = system(command);
+				log_message(ENCRYPT_LOG_INFO, "%s %d.", "Succeed to start key process", ret);
+			}
+						
+			pclose(fp);
 		}
 		else
 		{
-			log_message(ENCRYPT_LOG_INFO, "%s", "Started key thread");
+			log_message(ENCRYPT_LOG_INFO, "%s.", "Failed to start key process");
 		}
 	}
+
+	log_message(ENCRYPT_LOG_INFO, "%s", "Started mod_encrypt");
 
 #endif /* !WIN32 */
 
@@ -463,7 +489,6 @@ static void fcgienc_child_init(server_rec *dc, pool *p)
 	/* Initialize Log path */
 	{
 		const char *err;
-
 		/* Create log file */
 		if (fcgienc_logpath)
 		{
@@ -473,23 +498,15 @@ static void fcgienc_child_init(server_rec *dc, pool *p)
 
 		/* initialize global curl */
 		curl_global_init(CURL_GLOBAL_DEFAULT);
-	}
 
-	/* Initialize Key Thread */
-	{
-		int ret;
-
-		// init key thread
-		ret = key_thread_init();
-		if (ret < 0)
+		/* initialize memcached */
+		if (memcache_init() != 0)
 		{
-			log_message(ENCRYPT_LOG_DEBUG, "%s", "Could not init key thread, please check parameters and server addresses");
-		}
-		else
-		{
-			log_message(ENCRYPT_LOG_INFO, "%s", "Started key thread");
+			log_message(ENCRYPT_LOG_INFO, "%s", "Failed to initialize memcached, mod_encrypt will not accept the request");
 		}
 	}
+
+	log_message(ENCRYPT_LOG_INFO, "%s", "Started mod_encrypt");
 
 #ifdef APACHE2
     apr_pool_cleanup_register(p, NULL, fcgienc_child_exit, fcgienc_child_exit);

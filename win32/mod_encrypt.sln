@@ -3,6 +3,8 @@ Microsoft Visual Studio Solution File, Format Version 10.00
 # Visual Studio 2008
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_encrypt", "mod_encrypt.vcproj", "{132D841B-CE82-49E2-A217-5A20FBDA1BB1}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "encrypt_keyprocess", "encrypt_keyprocess.vcproj", "{8E1E72B1-A05E-4AE3-8503-2FAB65DB18C3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -19,6 +21,13 @@ Global
 		{132D841B-CE82-49E2-A217-5A20FBDA1BB1}.Release|Win32.Build.0 = Release|Win32
 		{132D841B-CE82-49E2-A217-5A20FBDA1BB1}.Release|x64.ActiveCfg = Release|x64
 		{132D841B-CE82-49E2-A217-5A20FBDA1BB1}.Release|x64.Build.0 = Release|x64
+		{8E1E72B1-A05E-4AE3-8503-2FAB65DB18C3}.Debug|Win32.ActiveCfg = Debug|Win32
+		{8E1E72B1-A05E-4AE3-8503-2FAB65DB18C3}.Debug|Win32.Build.0 = Debug|Win32
+		{8E1E72B1-A05E-4AE3-8503-2FAB65DB18C3}.Debug|x64.ActiveCfg = Debug|x64
+		{8E1E72B1-A05E-4AE3-8503-2FAB65DB18C3}.Debug|x64.Build.0 = Debug|x64
+		{8E1E72B1-A05E-4AE3-8503-2FAB65DB18C3}.Release|Win32.ActiveCfg = Release|Win32
+		{8E1E72B1-A05E-4AE3-8503-2FAB65DB18C3}.Release|Win32.Build.0 = Release|Win32
+		{8E1E72B1-A05E-4AE3-8503-2FAB65DB18C3}.Release|x64.ActiveCfg = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

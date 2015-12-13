@@ -22,7 +22,6 @@
 #define seteuid(arg) setresuid(-1, (arg), -1)
 #endif
 
-#include "fcgienc_keythread.h"
 #include "fcgienc_log.h"
 
 int fcgienc_dynamic_total_proc_count = 0;    /* number of running apps */

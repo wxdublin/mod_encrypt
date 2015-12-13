@@ -165,6 +165,7 @@ static int get_auth_token(char *tokenstr)
 	void *jsonhandler = NULL;
 	int timediff;
 	struct curl_slist* headers = NULL;
+	size_t len;
 
 	// check parameters
 	if (!tokenstr)
@@ -206,14 +207,9 @@ static int get_auth_token(char *tokenstr)
 		{
 			log_message(ENCRYPT_LOG_DEBUG, "curl failed : %s", curl_easy_strerror(res));
 
-			fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 			ret = -1;
 			goto AUTH_REQUEST_EXIT;
 		}
-
-		/* always cleanup */ 
-		curl_slist_free_all( headers ) ; headers = NULL;
-		curl_easy_cleanup(curl); curl = NULL;
 	}
 
 	// process json response
@@ -225,6 +221,7 @@ static int get_auth_token(char *tokenstr)
 	if (!token)
 	{
 		log_message(ENCRYPT_LOG_DEBUG, "not found \"token\" in response : %s", recvdata);
+		
 		ret = -1;
 		goto AUTH_REQUEST_EXIT;
 	}
@@ -234,13 +231,17 @@ static int get_auth_token(char *tokenstr)
 	if (!timestring)
 	{
 		log_message(ENCRYPT_LOG_DEBUG, "not found \"expiration_time\" in response : %s", recvdata);
+		
 		ret = -1;
 		goto AUTH_REQUEST_EXIT;
 	}
 
 	// store token
-	memcpy(tokenstr, token, strlen(token));
-	tokenstr[strlen(token)] = 0;
+	len = strlen(token);
+	if (len > 255)
+		len = 255;
+	memcpy(tokenstr, token, len);
+	tokenstr[len] = 0;
 
 	// store into memcache
 	timediff = (int)time_utc_diff(timestring);
@@ -271,6 +272,7 @@ static int get_master_key(const char *token, char *masterkeyid, char *masterkey,
 	char *jsonmasterkeyid, *jsonmasterkey, *jsoniv;
 	void *jsonhandler = NULL;
 	struct curl_slist* headers = NULL;
+	size_t len;
 
 	// check parameters
 	if (!token || !masterkeyid || !masterkey || !iv)
@@ -302,33 +304,33 @@ static int get_master_key(const char *token, char *masterkeyid, char *masterkey,
 		/* Perform the request, res will get the return code */ 
 		res = curl_easy_perform(curl);
 		log_message(ENCRYPT_LOG_DEBUG, "curl request : %s, header : %s", serverurl, headerstring);
-
+		
 		/* Check for errors */ 
 		if(res != CURLE_OK)
 		{
 			log_message(ENCRYPT_LOG_DEBUG, "curl failed : %s", curl_easy_strerror(res));
-
-			fprintf(stderr, "curl_easy_perform() failed: %s\n",	curl_easy_strerror(res));
+			
 			ret = -1;
 			goto MASTERKEY_EXIT;
 		}
-
-		/* always cleanup */ 
-		curl_easy_cleanup(curl); curl = NULL;
-		curl_slist_free_all( headers ) ; headers = NULL;
 	}
 
 	// process json response
 	jsonhandler = json_load(recvdata);
 	log_message(ENCRYPT_LOG_DEBUG, "curl response : %s", recvdata);
-
+	
 	// get key_id
 	jsonmasterkeyid = json_get_string(jsonhandler, "key_id");
 	if (!jsonmasterkeyid)
 	{
 		log_message(ENCRYPT_LOG_DEBUG, "not found \"master key id\" in response : %s", recvdata);
+		
 		ret = -1;
 		goto MASTERKEY_EXIT;
+	}
+	if (strcmp(jsonmasterkeyid, masterkeyid))
+	{
+		log_message(ENCRYPT_LOG_DEBUG, "unmatched master key id in old-%s : new-%s", masterkeyid, jsonmasterkeyid);
 	}
 
 	// get refresh time
@@ -360,14 +362,17 @@ static int get_master_key(const char *token, char *masterkeyid, char *masterkey,
 	}
 
 	// store into variable
-	memcpy(masterkeyid, jsonmasterkeyid, strlen(jsonmasterkeyid));
-	masterkeyid[strlen(jsonmasterkeyid)] = 0;
+	len = strlen(jsonmasterkey);
+	if (len > 255)
+		len = 255;
+	memcpy(masterkey, jsonmasterkey, len);
+	masterkey[len] = 0;
 
-	memcpy(masterkey, jsonmasterkey, strlen(jsonmasterkey));
-	masterkey[strlen(jsonmasterkey)] = 0;
-
-	memcpy(iv, jsoniv, strlen(jsoniv));
-	iv[strlen(jsoniv)] = 0;
+	len = strlen(jsoniv);
+	if (len > 255)
+		len = 255;
+	memcpy(iv, jsoniv, len);
+	iv[len] = 0;
 
 	ret = timeout;
 
@@ -396,6 +401,7 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 	int timeout;
 	char *jsonkeyencryptedbase64 = NULL;
 	struct curl_slist* headers = NULL;
+	size_t len;
 
 	// make request header
 	memset(headerstring, 0, HEADER_SIZE);
@@ -429,21 +435,15 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 		{
 			log_message(ENCRYPT_LOG_DEBUG, "curl failed : %s", curl_easy_strerror(res));
 
-			fprintf(stderr, "curl_easy_perform() failed: %s\n",	curl_easy_strerror(res));
-			curl_easy_cleanup(curl);
-			curl_slist_free_all( headers ) ;
-			return -1;
+			ret = -1;
+			goto DATAKEY_EXIT;
 		}
-
-		/* always cleanup */ 
-		curl_easy_cleanup(curl); curl = NULL;
-		curl_slist_free_all( headers ) ; headers = NULL;
 	}
 
 	// process json response
 	jsonhandler = json_load(recvdata);
 	log_message(ENCRYPT_LOG_DEBUG, "curl response : %s", recvdata);
-
+	
 	// get data key id
 	jsondatakeyid = json_get_string(jsonhandler, "key_id");
 	if (!jsondatakeyid)
@@ -458,15 +458,20 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 	jsonmasterkeyid = json_get_string(jsonhandler, "master_key_id");
 	if (!jsonmasterkeyid)
 	{
-		log_message(ENCRYPT_LOG_DEBUG, "unmatched master key id in response : %s", recvdata);
+		log_message(ENCRYPT_LOG_DEBUG, "not found master key id in response : %s", recvdata);
 
 		ret = -1;
 		goto DATAKEY_EXIT;
 	}
 	if (strcmp(jsonmasterkeyid, masterkeyid))
 	{
-		ret = -1;
-		goto DATAKEY_EXIT;
+		log_message(ENCRYPT_LOG_DEBUG, "unmatched master key id in old-%s : new-%s", masterkeyid, jsonmasterkeyid);
+
+		len = strlen(jsonmasterkeyid);
+		if (len > 255)
+			len = 255;
+		memcpy(masterkeyid, jsonmasterkeyid, len);
+		masterkeyid[len] = 0;
 	}
 
 	// get refresh interval
@@ -474,7 +479,6 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 	if (timeout < 0)
 	{
 		log_message(ENCRYPT_LOG_DEBUG, "not found \"data key refresh_interval\" in response : %s", recvdata);
-
 		ret = -1;
 		goto DATAKEY_EXIT;
 	}
@@ -484,16 +488,22 @@ static int get_data_key(const char *token, char *masterkeyid, char *datakeyid, c
 	if (!jsonkeyencryptedbase64)
 	{
 		log_message(ENCRYPT_LOG_DEBUG, "not found \"key_encrypted_base64\" in response : %s", recvdata);
-
 		ret = -1;
 		goto DATAKEY_EXIT;
 	}
 
 	// store into variable
-	memcpy(datakeyid, jsondatakeyid, strlen(jsondatakeyid));
-	datakeyid[strlen(jsondatakeyid)] = 0;
-	memcpy(datakey, jsonkeyencryptedbase64, strlen(jsonkeyencryptedbase64));
-	datakey[strlen(jsonkeyencryptedbase64)] = 0;
+	len = strlen(jsondatakeyid);
+	if (len > 255)
+		len = 255;
+	memcpy(datakeyid, jsondatakeyid, len);
+	datakeyid[len] = 0;
+	
+	len = strlen(jsonkeyencryptedbase64);
+	if (len > 255)
+		len = 255;
+	memcpy(datakey, jsonkeyencryptedbase64, len);
+	datakey[len] = 0;
 
 	ret = timeout;
 

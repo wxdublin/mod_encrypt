@@ -5,7 +5,7 @@
 #ifndef MOD_ENCRYPT_H
 #define MOD_ENCRYPT_H
 
-#define MOD_ENCRYPT_VERSION "1.0.0-9"
+#define MOD_ENCRYPT_VERSION "1.0.0-10"
 
 #define ENCRYPT_HANDLER_NAME "encrypt-script"
 

@@ -2,9 +2,9 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="9.00"
-	Name="mod_encrypt"
-	ProjectGUID="{132D841B-CE82-49E2-A217-5A20FBDA1BB1}"
-	RootNamespace="mod_encrypt"
+	Name="encrypt_keyprocess"
+	ProjectGUID="{8E1E72B1-A05E-4AE3-8503-2FAB65DB18C3}"
+	RootNamespace="encrypt_keyprocess"
 	Keyword="Win32Proj"
 	TargetFrameworkVersion="196613"
 	>
@@ -94,7 +94,7 @@
 			Name="Debug|x64"
 			OutputDirectory="F:\FastCGI\Apache24\modules"
 			IntermediateDirectory="$(PlatformName)\$(ConfigurationName)\$(ProjectName)"
-			ConfigurationType="2"
+			ConfigurationType="1"
 			CharacterSet="0"
 			>
 			<Tool
@@ -119,7 +119,7 @@
 				AdditionalIncludeDirectories="F:\FastCGI\Apache24\include;.\;.\libcurl\include;.\openssl\include;.\;.\libcurl\include;"
 				PreprocessorDefinitions="_DEBUG;WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;CURL_STATICLIB;HAVE_STDINT_H"
 				MinimalRebuild="true"
-				BasicRuntimeChecks="0"
+				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
 				UsePrecompiledHeader="0"
 				WarningLevel="3"
@@ -136,10 +136,9 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="ws2_32.lib winmm.lib apr-1.lib libapr-1.lib aprutil-1.lib libapriconv-1.lib libaprutil-1.lib libhttpd.lib libeay32.lib ssleay32.lib libcurl_a.lib "
-				OutputFile="$(OutDir)\$(ProjectName).so"
+				AdditionalDependencies="ws2_32.lib winmm.lib apr-1.lib libapr-1.lib aprutil-1.lib libapriconv-1.lib libaprutil-1.lib libeay32.lib ssleay32.lib libcurl_a.lib"
 				LinkIncremental="2"
-				AdditionalLibraryDirectories="F:\FastCGI\Apache24\lib;.\openssl\lib;.\libcurl\lib;"
+				AdditionalLibraryDirectories="F:\FastCGI\Apache24\lib;.\openssl\lib;.\libcurl\lib;.\libmemcached\lib"
 				IgnoreDefaultLibraryNames="LIBCMT;MSVCRT"
 				GenerateDebugInformation="true"
 				SubSystem="1"
@@ -243,10 +242,10 @@
 		</Configuration>
 		<Configuration
 			Name="Release|x64"
-			OutputDirectory="$(SolutionDir)$(PlatformName)\$(ConfigurationName)"
+			OutputDirectory="F:\FastCGI\Apache24\modules"
 			IntermediateDirectory="$(PlatformName)\$(ConfigurationName)"
 			ConfigurationType="1"
-			CharacterSet="1"
+			CharacterSet="0"
 			WholeProgramOptimization="1"
 			>
 			<Tool
@@ -269,7 +268,8 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
-				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE"
+				AdditionalIncludeDirectories="F:\FastCGI\Apache24\include;.\;.\libcurl\include;.\openssl\include;.\;.\libcurl\include;"
+				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;CURL_STATICLIB;HAVE_STDINT_H"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
 				UsePrecompiledHeader="0"
@@ -287,7 +287,10 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				LinkIncremental="1"
+				AdditionalDependencies="ws2_32.lib winmm.lib apr-1.lib libapr-1.lib aprutil-1.lib libapriconv-1.lib libaprutil-1.lib libeay32.lib ssleay32.lib libcurl_a.lib"
+				LinkIncremental="2"
+				AdditionalLibraryDirectories="F:\FastCGI\Apache24\lib;.\openssl\lib;.\libcurl\lib;.\libmemcached\lib"
+				IgnoreDefaultLibraryNames="LIBCMT;MSVCRT"
 				GenerateDebugInformation="true"
 				SubSystem="1"
 				OptimizeReferences="2"
@@ -326,23 +329,11 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
-				RelativePath="..\fcgienc.h"
-				>
-			</File>
-			<File
 				RelativePath="..\fcgienc_aes256cbc.c"
 				>
 			</File>
 			<File
 				RelativePath="..\fcgienc_aes256cbc.h"
-				>
-			</File>
-			<File
-				RelativePath="..\fcgienc_aes256ctr.c"
-				>
-			</File>
-			<File
-				RelativePath="..\fcgienc_aes256ctr.h"
 				>
 			</File>
 			<File
@@ -354,30 +345,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\fcgienc_buf.c"
-				>
-			</File>
-			<File
-				RelativePath="..\fcgienc_config.c"
-				>
-			</File>
-			<File
-				RelativePath="..\fcgienc_crypt.c"
-				>
-			</File>
-			<File
-				RelativePath="..\fcgienc_crypt.h"
-				>
-			</File>
-			<File
-				RelativePath="..\fcgienc_encap.c"
-				>
-			</File>
-			<File
-				RelativePath="..\fcgienc_encap.h"
-				>
-			</File>
-			<File
 				RelativePath="..\fcgienc_json.c"
 				>
 			</File>
@@ -386,19 +353,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\fcgienc_key.c"
+				RelativePath="..\fcgienc_keythread.c"
 				>
 			</File>
 			<File
-				RelativePath="..\fcgienc_key.h"
-				>
-			</File>
-			<File
-				RelativePath="..\fcgienc_log.c"
-				>
-			</File>
-			<File
-				RelativePath="..\fcgienc_log.h"
+				RelativePath="..\fcgienc_keythread.h"
 				>
 			</File>
 			<File
@@ -410,35 +369,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\fcgienc_pm.c"
-				>
-			</File>
-			<File
-				RelativePath="..\fcgienc_protocol.c"
-				>
-			</File>
-			<File
-				RelativePath="..\fcgienc_protocol.h"
-				>
-			</File>
-			<File
 				RelativePath="..\fcgienc_utctime.c"
 				>
 			</File>
 			<File
 				RelativePath="..\fcgienc_utctime.h"
-				>
-			</File>
-			<File
-				RelativePath="..\fcgienc_util.c"
-				>
-			</File>
-			<File
-				RelativePath="..\mod_encrypt.c"
-				>
-			</File>
-			<File
-				RelativePath="..\mod_encrypt.h"
 				>
 			</File>
 			<Filter

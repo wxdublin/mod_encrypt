@@ -29,6 +29,11 @@ char *fcgienc_password;					/* FastCGIENC Password */
 
 static FILE *fcgienc_logfp;
 
+#define MIN(_a, _b) ((_a < _b) ? _a : _b)
+#define SEC_TO_USEC(_s) (1000 * 1000 * _s)
+
+#define KEY_THREAD_DEFAULT_TIMEOUT (30)
+
 //////////////////////////////////////////////////////////////////////////
 /**
 * log message
@@ -577,6 +582,9 @@ void key_thread_func()
 	fcgienc_crypt fc;
 	int timeout;
 	int authtimeout, mktimeout, dktimeout;
+	int shortest_timeout;
+	unsigned long usec_elapsed = 0;
+	struct timeval start_tv, end_tv;
 	
 	// check parameters
 	if (!fcgienc_username || !fcgienc_password || !fcgienc_authserver || \
@@ -591,7 +599,9 @@ void key_thread_func()
 	authtimeout = mktimeout = dktimeout = 0;
 	while (1)
 	{
+	        shortest_timeout = KEY_THREAD_DEFAULT_TIMEOUT;
 		timeout = 0;
+		gettimeofday(&start_tv, NULL);
 
 		// Authentication Token
 		authtimeout -= 30;
@@ -603,16 +613,19 @@ void key_thread_func()
 			{
 				memcache_set(CACHE_KEYNAME_AUTHTOKEN, fc.token, timeout);
 				authtimeout = timeout;
+				shortest_timeout = MIN(shortest_timeout, authtimeout);
 				mktimeout = dktimeout = -1;
 			}
 			else
 			{
+				log_keythread("KEY-THREAD - error fetching auth token from key server");
 				goto KEY_ERROR;
 			}
 		}
 		ret = memcache_get(CACHE_KEYNAME_AUTHTOKEN, fc.token);
 		if (ret < 0)
 		{
+			log_keythread("KEY-THREAD - error fetching auth token from memcached");
 			goto KEY_ERROR;
 		}
 
@@ -629,9 +642,11 @@ void key_thread_func()
 				memcache_set(CACHE_KEYNAME_DATAKEYID, fc.dataKeyId, timeout);
 				memcache_set(CACHE_KEYNAME_ENCRYPTEDDATAKEY, fc.encryptedDataKey, timeout);
 				dktimeout = timeout;
+				shortest_timeout = MIN(shortest_timeout, timeout);
 			}
 			else
 			{
+				log_keythread("KEY-THREAD - error fetching data key from key server");
 				goto KEY_ERROR;
 			}
 		}
@@ -640,6 +655,7 @@ void key_thread_func()
 		ret += memcache_get(CACHE_KEYNAME_ENCRYPTEDDATAKEY, fc.encryptedDataKey);
 		if (ret < 0)
 		{
+			log_keythread("KEY-THREAD - error fetching data key from memcache");
 			goto KEY_ERROR;
 		}
 		
@@ -654,10 +670,12 @@ void key_thread_func()
 			{
 				memcache_set(CACHE_KEYNAME_MAKSTERKEY, fc.masterKey, timeout);
 				memcache_set(CACHE_KEYNAME_IV, fc.initializationVector, timeout);
+				shortest_timeout = MIN(shortest_timeout, timeout);
 				mktimeout = timeout;
 			}
 			else
 			{
+				log_keythread("KEY-THREAD - error fetching master key from key server");
 				goto KEY_ERROR;
 			}
 		}
@@ -665,6 +683,7 @@ void key_thread_func()
 		ret += memcache_get(CACHE_KEYNAME_IV, fc.initializationVector);
 		if (ret < 0)
 		{
+			log_keythread("KEY-THREAD - error fetching master key from memcache");
 			goto KEY_ERROR;
 		}
 		
@@ -682,21 +701,33 @@ void key_thread_func()
 			memcache_set(CACHE_KEYNAME_DATAKEY, fc.dataKey, 60);
 		}
 		else
+		{
+			log_keythread("KEY-THREAD - error decrypting data key");
 			goto KEY_ERROR;
+		}
 
+		gettimeofday(&end_tv, NULL);
+		usec_elapsed = (end_tv.tv_sec * 1000 * 1000 + end_tv.tv_usec) -
+		  (start_tv.tv_sec * 1000 * 1000 + start_tv.tv_usec);
+
+		// only sleep if no key has already expired
+		if (SEC_TO_USEC(shortest_timeout) > usec_elapsed)
+		{
 #ifdef WIN32
-		Sleep(30000);
+			Sleep(1000 * shortest_timeout);
 #else
-		sleep(30);
+			usleep(SEC_TO_USEC(shortest_timeout) - usec_elapsed);
 #endif
+		}
 		continue;
 
 KEY_ERROR:
+		log_keythread("KEY-THREAD - key error");
 		authtimeout = mktimeout = dktimeout = -1;
 #ifdef WIN32
-		Sleep(30000);
+		Sleep(1000 * shortest_timeout);
 #else
-		sleep(30);
+		usleep(SEC_TO_USEC(shortest_timeout));
 #endif
 	}
 	

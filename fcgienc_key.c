@@ -543,7 +543,50 @@ int key_active_request(fcgienc_crypt * fc)
 	}
 	else
 	{
-		log_message(ENCRYPT_LOG_DEBUG, "%s", "not found activie key in memcache");
+		log_message(ENCRYPT_LOG_WARN, "%s",
+                            "active key not found in memcache, fetching from key server");
+
+		fc->token[0] = 0;
+		fc->masterKeyId[0] = 0;
+		fc->masterKey[0] = 0;
+		fc->dataKeyId[0] = 0;
+		fc->dataKey[0] = 0;
+		fc->dataKeyLength = 0;
+
+		ret = get_auth_token(fc->token);
+		if (ret < 0)
+		{
+			log_message(ENCRYPT_LOG_ERR, "%s",
+			            "could not get auth token from key server");
+			return -1;
+		}
+
+		ret = get_data_key(fc->token, fc->masterKeyId,
+				   fc->dataKeyId, fc->encryptedDataKey);
+		if (ret < 0)
+		{
+			log_message(ENCRYPT_LOG_ERR, "%s", "could not get data key from key server");
+			return -1;
+                }
+
+                ret = get_master_key(fc->token, fc->masterKeyId, fc->masterKey,
+                                     fc->initializationVector);
+                if (ret < 0)
+                {
+			log_message(ENCRYPT_LOG_ERR, "%s",
+				    "could not get master key '%s' from key server",
+				    fc->masterKeyId);
+			return -1;
+                }
+
+                ret = key_calculate_real(fc);
+                if (ret < 0)
+                {
+			log_message(ENCRYPT_LOG_ERR, "%s",
+				    "could not calculate decryption key, datakey=%s, masterkey=%s",
+				    fc->dataKeyId, fc->masterKeyId);
+			return -1;
+                }
 	}
 
 	return ret;

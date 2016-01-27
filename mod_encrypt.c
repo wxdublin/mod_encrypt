@@ -894,7 +894,13 @@ static const char *process_headers(request_rec *r, fcgienc_request *fr)
 
 				if (fcgienc_decrypt_flag == TRUE)
 				{
-					InitDecrypt(&fr->decryptor);
+					ret = InitDecrypt(&fr->decryptor);
+					if (ret != 0)
+					{
+						r->status = HTTP_SERVICE_UNAVAILABLE;
+						r->header_only = TRUE;
+						ap_table_unset(r->err_headers_out, "Content-Length");
+					}
 				}
 			}
 

@@ -76,7 +76,7 @@ static void log_keythread(const char *fmt, ...)
 static int key_calculate_real(fcgienc_crypt * fc)
 {
 	int i;
-	size_t len;
+	ssize_t len;
 	unsigned char mkhex[32], ivhex[16];
 	char decodebuf[KEY_SIZE];
 	int decodelen;
@@ -141,7 +141,10 @@ static int key_calculate_real(fcgienc_crypt * fc)
 	len = DecryptAesCBC((unsigned char *)decodebuf, decodelen, keystr, mkhex, ivhex);
 
 	if (len < 0)
+	{
+		log_keythread("KEY-THREAD - AES-CBC decryption failed with key %s", fc->dataKeyId);
 		return -1;
+	}
 
 	// store into variable
 	memcpy(fc->dataKey, keystr, len);
